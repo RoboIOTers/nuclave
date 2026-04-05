@@ -37,6 +37,18 @@ export async function POST(
       );
     }
 
+    // If clicking the same phase, do nothing
+    if (phase === arena.phase) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          phase: arena.phase,
+          phaseStartedAt: arena.phaseStartedAt,
+          phaseDurationMinutes: arena.phaseDurationMinutes,
+        },
+      });
+    }
+
     // Auto-resolve duration: explicit > stored template > null
     let resolvedDuration = durationMinutes ?? null;
     if (resolvedDuration === null && arena.phaseDurations) {
@@ -48,7 +60,14 @@ export async function POST(
 
     const sql = getSql();
 
-    // Record time spent in the previous phase
+    // Check if this phase was already visited — restore its timer if so
+    const arenaRow = await sql`SELECT phase_history FROM arenas WHERE id = ${id}`;
+    const history = (arenaRow[0]?.phase_history ?? []) as Array<{
+      phase: string; startedAt: string; endedAt: string; timeSpentSeconds: number; plannedSeconds: number | null;
+    }>;
+    const previousVisit = history.findLast((h) => h.phase === phase);
+
+    // Record time spent in the current phase before switching
     if (arena.phaseStartedAt) {
       const prevStart = new Date(arena.phaseStartedAt).getTime();
       const timeSpentSeconds = Math.floor((Date.now() - prevStart) / 1000);
@@ -70,11 +89,20 @@ export async function POST(
       `;
     }
 
-    // Advance to new phase
+    // If revisiting a phase, account for time already spent
+    let startTimestamp = new Date().toISOString();
+    if (previousVisit && resolvedDuration) {
+      const allVisits = history.filter((h) => h.phase === phase);
+      const totalSpent = allVisits.reduce((sum, v) => sum + v.timeSpentSeconds, 0);
+      // Set start time back by the amount already spent, so the timer continues where it left off
+      startTimestamp = new Date(Date.now() - totalSpent * 1000).toISOString();
+    }
+
+    // Switch to phase
     const rows = await sql`
       UPDATE arenas SET
         phase = ${phase},
-        phase_started_at = now(),
+        phase_started_at = ${startTimestamp},
         phase_duration_minutes = ${resolvedDuration},
         updated_at = now()
       WHERE id = ${id}
