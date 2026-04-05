@@ -3,6 +3,7 @@ import { getArena, addContribution, getContributions, getSignalCounts } from '@/
 import type { StoredContribution } from '@/lib/store';
 import type { ContributionType } from '@/types/arena';
 import { CONTRIBUTION_TYPES } from '@/types/arena';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(
   request: NextRequest,
@@ -21,6 +22,20 @@ export async function POST(
   try {
     const body = await request.json();
     const { type, content, authorToken } = body;
+
+    // Rate limit: max 10 contributions per user per minute
+    const rateKey = `contribution:${arenaId}:${authorToken || 'anonymous'}`;
+    const rateCheck = checkRateLimit(rateKey, 10, 60_000);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Too many contributions. Please wait a moment.',
+          retryAfterMs: rateCheck.retryAfterMs,
+        },
+        { status: 429 }
+      );
+    }
 
     if (!content?.trim()) {
       return NextResponse.json(

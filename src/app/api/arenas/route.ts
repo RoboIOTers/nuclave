@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createArena, getAllArenas, getArenasByCreator, type StoredArena } from '@/lib/store';
 import type { ArenaType, ArenaMode } from '@/types/arena';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 function generateJoinCode(): string {
   const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -15,6 +16,16 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { title, description, type, mode, isAnonymous, maxContributors, contextDocument, creatorToken, template, phaseDurations } = body;
+
+    // Rate limit: max 5 arenas per user per hour
+    const rateKey = `arena-create:${creatorToken || 'anonymous'}`;
+    const rateCheck = checkRateLimit(rateKey, 5, 3600_000);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many arenas created. Please wait before creating another.' },
+        { status: 429 }
+      );
+    }
 
     if (!title?.trim()) {
       return NextResponse.json(

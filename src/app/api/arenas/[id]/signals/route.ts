@@ -3,6 +3,7 @@ import { toggleSignal, getArena, getSignalCounts, getContributions, addContribut
 import type { StoredContribution } from '@/lib/store';
 import type { SignalType } from '@/types/arena';
 import { SIGNAL_TYPES } from '@/types/arena';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { generateSkepticLocal } from '@/lib/ai/skeptic';
 
 export async function POST(
@@ -26,6 +27,16 @@ export async function POST(
       return NextResponse.json(
         { success: false, error: 'Invalid signal type' },
         { status: 400 }
+      );
+    }
+
+    // Rate limit: max 30 signals per user per minute
+    const rateKey = `signal:${arenaId}:${userToken}`;
+    const rateCheck = checkRateLimit(rateKey, 30, 60_000);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Too many reactions. Slow down.' },
+        { status: 429 }
       );
     }
 

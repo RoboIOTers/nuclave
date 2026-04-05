@@ -62,6 +62,7 @@ export default function ArenaPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
   const [participantCount, setParticipantCount] = useState(1);
   const feedRef = useRef<HTMLDivElement>(null);
   const userToken = typeof window !== 'undefined' ? getUserToken() : 'server';
@@ -140,13 +141,17 @@ export default function ArenaPage() {
 
         if (response.ok) {
           const data = await response.json();
-          // Add locally + broadcast to other clients
           setContributions((prev) => [data.data, ...prev]);
           emitContribution(data.data);
           feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+          setRateLimitError(null);
+        } else if (response.status === 429) {
+          const err = await response.json();
+          setRateLimitError(err.error || 'Too many contributions. Please wait.');
+          setTimeout(() => setRateLimitError(null), 5000);
         }
       } catch {
-        // Network error — contribution lost
+        // Network error
       } finally {
         setIsSubmitting(false);
       }
@@ -367,6 +372,13 @@ export default function ArenaPage() {
       <div className="flex-1 flex max-w-7xl mx-auto w-full">
         {/* Main feed */}
         <div className="flex-1 flex flex-col min-w-0 border-r border-border">
+          {/* Rate limit warning */}
+          {rateLimitError && (
+            <div className="px-4 py-2 bg-accent/10 text-accent text-xs font-mono text-center">
+              {rateLimitError}
+            </div>
+          )}
+
           {/* Contribution input */}
           <div className="p-4 border-b border-border">
             <ContributionInput

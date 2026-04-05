@@ -13,6 +13,7 @@ interface ContributionInputProps {
 export function ContributionInput({ onSubmit, disabled, arenaDescription }: ContributionInputProps) {
   const [content, setContent] = useState('');
   const [isClassifying, setIsClassifying] = useState(false);
+  const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = async () => {
