@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Download,
 } from 'lucide-react';
+import { PhaseTimer } from './phase-timer';
 import { useState } from 'react';
 import type { ArenaMode, ArenaPhase } from '@/types/arena';
 import { ARENA_PHASES } from '@/types/arena';
@@ -33,6 +34,9 @@ interface ArenaHeaderProps {
   phase: ArenaPhase | 'closed';
   isAnonymous: boolean;
   participantCount: number;
+  phaseStartedAt?: string | null;
+  phaseDurationMinutes?: number | null;
+  templatePhaseDurations?: Record<string, number> | null;
   onPhaseChange?: (phase: ArenaPhase) => void;
 }
 
@@ -44,6 +48,9 @@ export function ArenaHeader({
   phase,
   isAnonymous,
   participantCount,
+  phaseStartedAt,
+  phaseDurationMinutes,
+  templatePhaseDurations,
   onPhaseChange,
 }: ArenaHeaderProps) {
   const [copied, setCopied] = useState(false);
@@ -64,12 +71,13 @@ export function ArenaHeader({
     const currentIndex = ARENA_PHASES.indexOf(phase as ArenaPhase);
     if (currentIndex < 0 || currentIndex >= ARENA_PHASES.length - 1) return;
     const nextPhase = ARENA_PHASES[currentIndex + 1];
+    const duration = templatePhaseDurations?.[nextPhase] ?? null;
 
     try {
       const res = await fetch(`/api/arenas/${arenaId}/phase`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phase: nextPhase }),
+        body: JSON.stringify({ phase: nextPhase, durationMinutes: duration }),
       });
       if (res.ok) {
         onPhaseChange?.(nextPhase);
@@ -113,6 +121,12 @@ export function ArenaHeader({
               >
                 {phaseInfo.label}
               </span>
+              {/* Phase timer */}
+              <PhaseTimer
+                phaseStartedAt={phaseStartedAt ?? null}
+                phaseDurationMinutes={phaseDurationMinutes ?? null}
+                onTimerExpired={canAdvance ? advancePhase : undefined}
+              />
               {canAdvance && (
                 <button
                   onClick={advancePhase}

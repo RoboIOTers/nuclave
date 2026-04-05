@@ -12,17 +12,34 @@ import {
   EyeOff,
   Eye,
   Users,
+  RotateCcw,
+  Search,
+  GitBranch,
+  ShieldAlert,
+  ListOrdered,
+  Lightbulb,
 } from 'lucide-react';
-import type { ArenaType, ArenaMode } from '@/types/arena';
+import type { ArenaMode } from '@/types/arena';
+import { ARENA_TEMPLATES, type ArenaTemplate } from '@/lib/templates';
+import { getUserToken } from '@/lib/utils/user-token';
+
+const TEMPLATE_ICONS: Record<string, typeof Lightbulb> = {
+  'rotate-ccw': RotateCcw,
+  'search': Search,
+  'git-branch': GitBranch,
+  'shield-alert': ShieldAlert,
+  'list-ordered': ListOrdered,
+  'lightbulb': Lightbulb,
+};
 
 export default function CreateArenaPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<ArenaTemplate | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    type: 'brainstorm' as ArenaType,
     mode: 'live' as ArenaMode,
     isAnonymous: true,
     maxContributors: 10,
@@ -36,6 +53,15 @@ export default function CreateArenaPage() {
     setFormData((prev) => ({ ...prev, [key]: value }));
   };
 
+  const selectTemplate = (template: ArenaTemplate) => {
+    setSelectedTemplate(template);
+    setFormData((prev) => ({
+      ...prev,
+      title: template.defaultTitle || prev.title,
+      description: template.contextPrompt || prev.description,
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -44,7 +70,12 @@ export default function CreateArenaPage() {
       const response = await fetch('/api/arenas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          type: selectedTemplate?.type ?? 'brainstorm',
+          creatorToken: getUserToken(),
+          template: selectedTemplate?.id ?? null,
+        }),
       });
 
       if (!response.ok) throw new Error('Failed to create arena');
@@ -59,8 +90,8 @@ export default function CreateArenaPage() {
   return (
     <div className="min-h-screen bg-paper">
       <div className="bg-ink text-paper">
-        <div className="max-w-xl mx-auto px-6 py-4 flex items-center gap-4">
-          <Link href="/" className="text-paper/40 hover:text-paper transition-colors">
+        <div className="max-w-2xl mx-auto px-6 py-4 flex items-center gap-4">
+          <Link href="/dashboard" className="text-paper/40 hover:text-paper transition-colors">
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <span className="font-display font-bold text-lg">
@@ -69,16 +100,52 @@ export default function CreateArenaPage() {
         </div>
       </div>
 
-      <div className="max-w-xl mx-auto px-6 py-12">
-        <h1 className="font-display text-2xl font-bold tracking-tight mb-1">
+      <div className="max-w-2xl mx-auto px-6 py-8">
+        {/* Template picker */}
+        <h1 className="font-display text-xl font-bold tracking-tight mb-1">
           Start a brainstorm
         </h1>
-        <p className="text-dim text-sm mb-8">
-          Share the link — no account required to join.
+        <p className="text-dim text-sm mb-6">
+          Pick a template or start from scratch.
         </p>
 
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-8">
+          {ARENA_TEMPLATES.map((t) => {
+            const Icon = TEMPLATE_ICONS[t.icon] ?? Lightbulb;
+            const isSelected = selectedTemplate?.id === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => selectTemplate(t)}
+                className={`border p-3 text-left transition-colors ${
+                  isSelected
+                    ? 'border-accent bg-accent/5'
+                    : 'border-border bg-card hover:border-dim'
+                }`}
+              >
+                <Icon className={`w-4 h-4 mb-1.5 ${isSelected ? 'text-accent' : 'text-dim'}`} />
+                <span className="block font-display text-xs font-semibold">{t.name}</span>
+                <span className="block text-[10px] text-dim mt-0.5 leading-tight">{t.description}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Phase durations preview */}
+        {selectedTemplate && (
+          <div className="flex items-center gap-1 mb-6 text-[10px] font-mono text-dim">
+            <Clock className="w-3 h-3" />
+            <span>Suggested timing:</span>
+            {Object.entries(selectedTemplate.phaseDurations).map(([phase, mins]) => (
+              <span key={phase} className="px-1.5 py-0.5 bg-card border border-border">
+                {phase} {mins}m
+              </span>
+            ))}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Title — the only required field */}
           <div>
             <input
               type="text"
@@ -91,7 +158,6 @@ export default function CreateArenaPage() {
             />
           </div>
 
-          {/* Description — optional but visible */}
           <div>
             <textarea
               value={formData.description}
@@ -102,121 +168,70 @@ export default function CreateArenaPage() {
             />
           </div>
 
-          {/* Submit */}
           <button
             type="submit"
             disabled={isSubmitting || !formData.title.trim()}
             className="w-full flex items-center justify-center gap-2 bg-ink text-paper py-3.5 font-display font-semibold text-sm tracking-wide hover:bg-ink/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? (
-              'Creating...'
-            ) : (
-              <>
-                Launch Arena
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
+            {isSubmitting ? 'Creating...' : <><ArrowRight className="w-4 h-4" /> Launch Arena</>}
           </button>
 
-          {/* Advanced options — collapsed */}
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="flex items-center gap-1.5 text-xs text-dim hover:text-ink transition-colors mx-auto"
           >
-            <ChevronDown
-              className={`w-3.5 h-3.5 transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
-            />
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
             {showAdvanced ? 'Hide' : 'Show'} advanced options
           </button>
 
           {showAdvanced && (
             <div className="border border-border bg-card p-5 space-y-5">
-              {/* Mode + Anonymous */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-mono text-[10px] tracking-wider uppercase text-dim mb-1.5">
-                    Mode
-                  </label>
+                  <label className="block font-mono text-[10px] tracking-wider uppercase text-dim mb-1.5">Mode</label>
                   <div className="flex gap-1.5">
                     <button
                       type="button"
                       onClick={() => updateField('mode', 'live')}
                       className={`flex-1 flex items-center justify-center gap-1.5 border py-2 text-xs font-medium transition-colors ${
-                        formData.mode === 'live'
-                          ? 'border-accent bg-accent/5 text-accent'
-                          : 'border-border text-dim hover:border-dim'
+                        formData.mode === 'live' ? 'border-accent bg-accent/5 text-accent' : 'border-border text-dim hover:border-dim'
                       }`}
                     >
-                      <Zap className="w-3.5 h-3.5" />
-                      Live
+                      <Zap className="w-3.5 h-3.5" /> Live
                     </button>
                     <button
                       type="button"
                       onClick={() => updateField('mode', 'async')}
                       className={`flex-1 flex items-center justify-center gap-1.5 border py-2 text-xs font-medium transition-colors ${
-                        formData.mode === 'async'
-                          ? 'border-accent bg-accent/5 text-accent'
-                          : 'border-border text-dim hover:border-dim'
+                        formData.mode === 'async' ? 'border-accent bg-accent/5 text-accent' : 'border-border text-dim hover:border-dim'
                       }`}
                     >
-                      <Clock className="w-3.5 h-3.5" />
-                      Async
+                      <Clock className="w-3.5 h-3.5" /> Async
                     </button>
                   </div>
                 </div>
                 <div>
-                  <label className="block font-mono text-[10px] tracking-wider uppercase text-dim mb-1.5">
-                    Identity
-                  </label>
+                  <label className="block font-mono text-[10px] tracking-wider uppercase text-dim mb-1.5">Identity</label>
                   <button
                     type="button"
                     onClick={() => updateField('isAnonymous', !formData.isAnonymous)}
                     className={`w-full flex items-center justify-center gap-1.5 border py-2 text-xs font-medium transition-colors ${
-                      formData.isAnonymous
-                        ? 'border-accent-3 bg-accent-3/5 text-accent-3'
-                        : 'border-border text-dim'
+                      formData.isAnonymous ? 'border-accent-3 bg-accent-3/5 text-accent-3' : 'border-border text-dim'
                     }`}
                   >
-                    {formData.isAnonymous ? (
-                      <><EyeOff className="w-3.5 h-3.5" /> Anonymous</>
-                    ) : (
-                      <><Eye className="w-3.5 h-3.5" /> Named</>
-                    )}
+                    {formData.isAnonymous ? <><EyeOff className="w-3.5 h-3.5" /> Anonymous</> : <><Eye className="w-3.5 h-3.5" /> Named</>}
                   </button>
                 </div>
               </div>
-
-              {/* Max contributors */}
               <div>
-                <label className="block font-mono text-[10px] tracking-wider uppercase text-dim mb-1.5">
-                  Max contributors
-                </label>
+                <label className="block font-mono text-[10px] tracking-wider uppercase text-dim mb-1.5">Max contributors</label>
                 <div className="flex items-center gap-2 border border-border px-3 py-2">
                   <Users className="w-3.5 h-3.5 text-dim" />
-                  <input
-                    type="number"
-                    min={2}
-                    max={500}
-                    value={formData.maxContributors}
+                  <input type="number" min={2} max={500} value={formData.maxContributors}
                     onChange={(e) => updateField('maxContributors', parseInt(e.target.value) || 10)}
-                    className="w-full bg-transparent text-xs focus:outline-none"
-                  />
+                    className="w-full bg-transparent text-xs focus:outline-none" />
                 </div>
-              </div>
-
-              {/* Context */}
-              <div>
-                <label className="block font-mono text-[10px] tracking-wider uppercase text-dim mb-1.5">
-                  Background document
-                </label>
-                <textarea
-                  value={formData.contextDocument}
-                  onChange={(e) => updateField('contextDocument', e.target.value)}
-                  placeholder="Paste a brief, spec, or link..."
-                  rows={3}
-                  className="w-full bg-paper border border-border px-3 py-2 text-xs focus:outline-none focus:border-accent transition-colors resize-none placeholder:text-dim/50"
-                />
               </div>
             </div>
           )}

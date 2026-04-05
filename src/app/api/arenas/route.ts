@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createArena, getAllArenas, type StoredArena } from '@/lib/store';
+import { createArena, getAllArenas, getArenasByCreator, type StoredArena } from '@/lib/store';
 import type { ArenaType, ArenaMode } from '@/types/arena';
 
 function generateJoinCode(): string {
@@ -14,7 +14,7 @@ function generateJoinCode(): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { title, description, type, mode, isAnonymous, maxContributors, contextDocument } = body;
+    const { title, description, type, mode, isAnonymous, maxContributors, contextDocument, creatorToken, template } = body;
 
     if (!title?.trim()) {
       return NextResponse.json(
@@ -35,6 +35,8 @@ export async function POST(request: NextRequest) {
       joinCode: generateJoinCode(),
       contextDocument: contextDocument?.trim() || null,
       maxContributors: Math.min(Math.max(maxContributors || 10, 2), 500),
+      creatorToken: creatorToken || 'anonymous',
+      template: template || null,
       createdAt: new Date().toISOString(),
     };
 
@@ -49,6 +51,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const creatorToken = request.nextUrl.searchParams.get('creator');
+
+  if (creatorToken) {
+    return NextResponse.json({ success: true, data: await getArenasByCreator(creatorToken) });
+  }
+
   return NextResponse.json({ success: true, data: await getAllArenas() });
 }

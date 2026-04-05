@@ -20,6 +20,8 @@ export interface StoredArena {
   joinCode: string;
   contextDocument: string | null;
   maxContributors: number;
+  creatorToken: string;
+  template: string | null;
   createdAt: string;
 }
 
@@ -64,8 +66,8 @@ function getSql() {
 export async function createArena(arena: StoredArena): Promise<StoredArena> {
   const sql = getSql();
   await sql`
-    INSERT INTO arenas (id, title, description, type, mode, phase, status, is_anonymous, join_code, context_document, max_contributors, created_at)
-    VALUES (${arena.id}, ${arena.title}, ${arena.description}, ${arena.type}, ${arena.mode}, ${arena.phase}, ${arena.status}, ${arena.isAnonymous}, ${arena.joinCode}, ${arena.contextDocument}, ${arena.maxContributors}, ${arena.createdAt})
+    INSERT INTO arenas (id, title, description, type, mode, phase, status, is_anonymous, join_code, context_document, max_contributors, creator_token, created_at)
+    VALUES (${arena.id}, ${arena.title}, ${arena.description}, ${arena.type}, ${arena.mode}, ${arena.phase}, ${arena.status}, ${arena.isAnonymous}, ${arena.joinCode}, ${arena.contextDocument}, ${arena.maxContributors}, ${arena.creatorToken}, ${arena.createdAt})
   `;
   return arena;
 }
@@ -90,6 +92,31 @@ export async function getAllArenas(): Promise<StoredArena[]> {
   return rows.map(mapArenaRow);
 }
 
+export async function getArenasByCreator(creatorToken: string): Promise<StoredArena[]> {
+  const sql = getSql();
+  const rows = await sql`SELECT * FROM arenas WHERE creator_token = ${creatorToken} ORDER BY created_at DESC LIMIT 50`;
+  return rows.map(mapArenaRow);
+}
+
+export async function getArenasForParticipant(userToken: string): Promise<StoredArena[]> {
+  const sql = getSql();
+  const rows = await sql`
+    SELECT DISTINCT a.* FROM arenas a
+    LEFT JOIN contributions c ON c.arena_id = a.id AND c.author_token = ${userToken}
+    LEFT JOIN participants p ON p.arena_id = a.id AND p.user_token = ${userToken}
+    WHERE a.creator_token = ${userToken} OR c.id IS NOT NULL OR p.id IS NOT NULL
+    ORDER BY a.created_at DESC
+    LIMIT 50
+  `;
+  return rows.map(mapArenaRow);
+}
+
+export async function getContributionCount(arenaId: string): Promise<number> {
+  const sql = getSql();
+  const rows = await sql`SELECT COUNT(*)::int as count FROM contributions WHERE arena_id = ${arenaId}`;
+  return (rows[0]?.count as number) ?? 0;
+}
+
 export async function updateArenaPhase(id: string, phase: ArenaPhase): Promise<StoredArena | undefined> {
   const sql = getSql();
   const rows = await sql`UPDATE arenas SET phase = ${phase}, updated_at = now() WHERE id = ${id} RETURNING *`;
@@ -110,6 +137,8 @@ function mapArenaRow(row: Record<string, unknown>): StoredArena {
     joinCode: row.join_code as string,
     contextDocument: row.context_document as string | null,
     maxContributors: row.max_contributors as number,
+    creatorToken: (row.creator_token as string) ?? 'anonymous',
+    template: (row.template as string) ?? null,
     createdAt: (row.created_at as Date).toISOString(),
   };
 }
