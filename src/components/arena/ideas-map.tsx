@@ -141,7 +141,9 @@ export function IdeasMap({ contributions }: IdeasMapProps) {
     // Build nodes
     const newNodes: MapNode[] = contributions.map((c, i) => {
       const agree = c.signals.agree;
-      const radius = 16 + Math.min(agree * 3, 24);
+      const challenge = c.signals.challenge;
+      // Agree grows the bubble, disagree shrinks it (min 10px)
+      const radius = Math.max(10, 18 + agree * 5 - challenge * 3);
       // Start in a circle so they don't all spawn at 0,0
       const angle = (i / Math.max(contributions.length, 1)) * 2 * Math.PI;
       const startR = Math.min(w, h) * 0.2;
@@ -234,14 +236,18 @@ export function IdeasMap({ contributions }: IdeasMapProps) {
         ))}
       </div>
 
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-3 text-[9px] font-mono text-paper/30">
-        <span className="flex items-center gap-1">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(34,197,94,0.3)' }} />
-          consensus
+      <div className="absolute top-3 right-3 z-10 flex flex-col gap-1 text-[9px] font-mono text-paper/30">
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-4 rounded-full border border-paper/20" style={{ background: 'rgba(34,197,94,0.15)' }} />
+          bigger = more agree
         </span>
-        <span className="flex items-center gap-1">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(245,158,11,0.3)' }} />
-          contested
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full border border-paper/20" style={{ background: 'rgba(239,68,68,0.15)' }} />
+          smaller = more disagree
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full border border-paper/30" style={{ background: 'rgba(245,158,11,0.2)', boxShadow: '0 0 6px rgba(245,158,11,0.4)' }} />
+          glow = marked important
         </span>
         <span className="flex items-center gap-1">
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(239,68,68,0.3)' }} />
@@ -280,6 +286,7 @@ export function IdeasMap({ contributions }: IdeasMapProps) {
         {nodes.map((n) => {
           const isHov = hoveredNode?.id === n.id;
           const fill = TYPE_FILL[n.type];
+          const glowIntensity = n.critical; // "important" signals
           return (
             <g
               key={n.id}
@@ -287,18 +294,37 @@ export function IdeasMap({ contributions }: IdeasMapProps) {
               onMouseLeave={() => setHoveredNode(null)}
               style={{ cursor: 'pointer' }}
             >
-              {/* Agree ring */}
-              {n.agree > 0 && (
-                <circle cx={n.x ?? 0} cy={n.y ?? 0} r={n.radius + 3}
-                  fill="none" stroke={fill} strokeWidth={1.5} strokeOpacity={0.3} />
+              {/* Important glow — pulsing rings, more rings = more important */}
+              {glowIntensity > 0 && (
+                <>
+                  <circle cx={n.x ?? 0} cy={n.y ?? 0}
+                    r={n.radius + 8 + glowIntensity * 6}
+                    fill="none" stroke={fill}
+                    strokeWidth={1}
+                    strokeOpacity={0.1 + Math.min(glowIntensity * 0.05, 0.2)}
+                  />
+                  <circle cx={n.x ?? 0} cy={n.y ?? 0}
+                    r={n.radius + 4 + glowIntensity * 3}
+                    fill="none" stroke={fill}
+                    strokeWidth={1.5}
+                    strokeOpacity={0.15 + Math.min(glowIntensity * 0.08, 0.3)}
+                  />
+                  {/* Inner glow fill */}
+                  <circle cx={n.x ?? 0} cy={n.y ?? 0}
+                    r={n.radius + 2}
+                    fill={fill}
+                    fillOpacity={Math.min(0.08 + glowIntensity * 0.04, 0.25)}
+                  />
+                </>
               )}
-              {/* Main bubble */}
+              {/* Main bubble — size driven by agree, shrunk by disagree */}
               <circle
                 cx={n.x ?? 0} cy={n.y ?? 0} r={n.radius}
                 fill={fill}
-                fillOpacity={isHov ? 0.95 : n.isSkepticAi ? 0.35 : 0.65}
-                stroke={isHov ? '#fff' : 'none'}
-                strokeWidth={2}
+                fillOpacity={isHov ? 0.95 : n.isSkepticAi ? 0.35 : 0.7}
+                stroke={isHov ? '#fff' : glowIntensity > 0 ? fill : 'none'}
+                strokeWidth={isHov ? 2 : glowIntensity > 0 ? 1.5 : 0}
+                strokeOpacity={isHov ? 1 : 0.5}
               />
               {/* Label */}
               <text
@@ -308,7 +334,7 @@ export function IdeasMap({ contributions }: IdeasMapProps) {
                 fontWeight="700" fontFamily="system-ui"
                 style={{ pointerEvents: 'none' }}
               >
-                {n.agree > 0 ? `+${n.agree}` : n.isSkepticAi ? 'AI' : ''}
+                {n.isSkepticAi ? 'AI' : n.agree > 0 || n.challenge > 0 ? `${n.agree > 0 ? '+' + n.agree : ''}${n.challenge > 0 ? ' -' + n.challenge : ''}`.trim() : ''}
               </text>
             </g>
           );
