@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import {
   CheckCircle,
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
   Sparkles,
   Loader2,
   ThumbsUp,
+  RefreshCw,
 } from 'lucide-react';
 import type { ContributionType, SignalType } from '@/types/arena';
 
@@ -46,24 +47,48 @@ interface Cluster {
   totalAgree: number;
 }
 
-export function ClusterView({ contributions, arenaId }: ClusterViewProps) {
-  const [clusters, setClusters] = useState<Cluster[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+function buildLocalClusters(contributions: Contribution[]): Cluster[] {
+  const byType: Record<string, Contribution[]> = {};
+  for (const c of contributions) {
+    if (!byType[c.type]) byType[c.type] = [];
+    byType[c.type].push(c);
+  }
 
-  useEffect(() => {
+  const typeLabels: Record<string, string> = {
+    benefit: 'Benefits & Strengths',
+    risk: 'Risks & Concerns',
+    feature: 'Ideas & Features',
+    blocker: 'Blockers',
+    checklist: 'Requirements',
+    question: 'Open Questions',
+    decision: 'Decisions',
+    wildcard: 'Wild Cards',
+  };
+
+  return Object.entries(byType)
+    .map(([type, items]) => ({
+      label: typeLabels[type] ?? type,
+      type: type as ContributionType,
+      items: items.sort((a, b) => b.signals.agree - a.signals.agree),
+      totalAgree: items.reduce((sum, i) => sum + i.signals.agree, 0),
+    }))
+    .sort((a, b) => b.items.length - a.items.length);
+}
+
+export function ClusterView({ contributions, arenaId }: ClusterViewProps) {
+  const [clusters, setClusters] = useState<Cluster[] | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [source, setSource] = useState<'ai' | 'local'>('local');
+
+  // Build clusters on demand, not on every render
+  const buildClusters = useCallback(async () => {
     if (contributions.length === 0) {
       setClusters([]);
       return;
     }
 
-    // Try AI clustering, fall back to type-based grouping
-    buildClusters();
-  }, [contributions]);
-
-  const buildClusters = async () => {
     setIsLoading(true);
 
-    // Try AI-powered clustering
     try {
       const res = await fetch(`/api/arenas/${arenaId}/clusters`, {
         method: 'POST',
@@ -73,6 +98,7 @@ export function ClusterView({ contributions, arenaId }: ClusterViewProps) {
             id: c.id,
             type: c.type,
             content: c.content,
+            signals: c.signals,
           })),
         }),
       });
@@ -81,55 +107,25 @@ export function ClusterView({ contributions, arenaId }: ClusterViewProps) {
         const data = await res.json();
         if (data.data?.clusters?.length > 0) {
           setClusters(data.data.clusters);
+          setSource('ai');
           setIsLoading(false);
           return;
         }
       }
     } catch {
-      // Fall through to local grouping
+      // Fall through
     }
 
     // Fallback: group by type
-    const byType: Record<string, Contribution[]> = {};
-    for (const c of contributions) {
-      if (!byType[c.type]) byType[c.type] = [];
-      byType[c.type].push(c);
-    }
-
-    const typeLabels: Record<string, string> = {
-      benefit: 'Benefits & Strengths',
-      risk: 'Risks & Concerns',
-      feature: 'Ideas & Features',
-      blocker: 'Blockers',
-      checklist: 'Requirements',
-      question: 'Open Questions',
-      decision: 'Decisions',
-      wildcard: 'Wild Cards',
-    };
-
-    const typeClusters: Cluster[] = Object.entries(byType)
-      .map(([type, items]) => ({
-        label: typeLabels[type] ?? type,
-        type: type as ContributionType,
-        items: items.sort((a, b) => b.signals.agree - a.signals.agree),
-        totalAgree: items.reduce((sum, i) => sum + i.signals.agree, 0),
-      }))
-      .sort((a, b) => b.items.length - a.items.length);
-
-    setClusters(typeClusters);
+    setClusters(buildLocalClusters(contributions));
+    setSource('local');
     setIsLoading(false);
-  };
+  }, [contributions, arenaId]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-5 h-5 text-dim animate-spin" />
-        <span className="ml-2 text-xs text-dim">Building clusters...</span>
-      </div>
-    );
-  }
+  // Show local clusters immediately, offer AI clustering
+  const displayClusters = clusters ?? buildLocalClusters(contributions);
 
-  if (clusters.length === 0) {
+  if (contributions.length === 0) {
     return (
       <div className="text-center py-12 text-dim text-sm">
         No contributions to visualize yet.
@@ -139,34 +135,45 @@ export function ClusterView({ contributions, arenaId }: ClusterViewProps) {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Overview bar */}
-      <div className="flex gap-1 h-3 rounded-full overflow-hidden bg-border">
-        {clusters.map((cluster) => {
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[10px] text-dim uppercase tracking-wider">
+          {displayClusters.length} clusters &middot; {contributions.length} contributions &middot; {source}
+        </span>
+        <button
+          onClick={buildClusters}
+          disabled={isLoading}
+          className="flex items-center gap-1.5 text-[11px] text-accent-2 hover:underline disabled:opacity-40"
+        >
+          {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+          {clusters === null ? 'Generate AI Clusters' : 'Refresh'}
+        </button>
+      </div>
+
+      {/* Proportion bar */}
+      <div className="flex gap-0.5 h-2.5 rounded-sm overflow-hidden bg-border">
+        {displayClusters.map((cluster) => {
           const pct = (cluster.items.length / contributions.length) * 100;
-          const colors = TYPE_COLORS[cluster.type];
+          const colors = TYPE_COLORS[cluster.type] ?? TYPE_COLORS.feature;
           return (
             <div
               key={cluster.label}
-              className={`${colors.bg} border ${colors.border} transition-all`}
-              style={{ width: `${Math.max(pct, 3)}%` }}
-              title={`${cluster.label}: ${cluster.items.length} contributions`}
+              className={`${colors.bg} border-y ${colors.border} transition-all`}
+              style={{ width: `${Math.max(pct, 4)}%` }}
+              title={`${cluster.label}: ${cluster.items.length}`}
             />
           );
         })}
       </div>
 
       {/* Cluster cards */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {clusters.map((cluster) => {
-          const colors = TYPE_COLORS[cluster.type];
+      <div className="grid gap-3 sm:grid-cols-2">
+        {displayClusters.map((cluster) => {
+          const colors = TYPE_COLORS[cluster.type] ?? TYPE_COLORS.feature;
           const Icon = colors.icon;
 
           return (
-            <div
-              key={cluster.label}
-              className={`border ${colors.border} ${colors.bg} p-4 rounded-sm`}
-            >
-              {/* Cluster header */}
+            <div key={cluster.label} className={`border ${colors.border} ${colors.bg} p-4`}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Icon className={`w-4 h-4 ${colors.text}`} />
@@ -175,23 +182,18 @@ export function ClusterView({ contributions, arenaId }: ClusterViewProps) {
                   </h3>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] font-mono text-dim">
-                  <span>{cluster.items.length} items</span>
+                  <span>{cluster.items.length}</span>
                   {cluster.totalAgree > 0 && (
                     <span className="flex items-center gap-0.5">
-                      <ThumbsUp className="w-3 h-3" />
-                      {cluster.totalAgree}
+                      <ThumbsUp className="w-3 h-3" />{cluster.totalAgree}
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Items */}
               <div className="space-y-1.5">
                 {cluster.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-start gap-2 text-xs text-ink/70 leading-relaxed"
-                  >
+                  <div key={item.id} className="flex items-start gap-2 text-xs text-ink/70 leading-relaxed">
                     <span className={`w-1.5 h-1.5 rounded-full ${colors.text} bg-current mt-1.5 shrink-0`} />
                     <span className={item.isSkepticAi ? 'italic text-dim' : ''}>
                       {item.content}
