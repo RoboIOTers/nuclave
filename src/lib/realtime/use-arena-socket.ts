@@ -10,6 +10,7 @@ interface ArenaSocketCallbacks {
   onPhaseChanged: (phase: string) => void;
   onParticipantCount: (count: number) => void;
   onSummaryUpdated: (summary: Record<string, unknown>) => void;
+  onContributionEdited: (data: { contributionId: string; content: string }) => void;
 }
 
 export function useArenaSocket(arenaId: string, callbacks: ArenaSocketCallbacks) {
@@ -47,6 +48,10 @@ export function useArenaSocket(arenaId: string, callbacks: ArenaSocketCallbacks)
 
     socket.on('summary-updated', (summary) => {
       callbacksRef.current.onSummaryUpdated(summary);
+    });
+
+    socket.on('contribution-edited', (data) => {
+      callbacksRef.current.onContributionEdited(data);
     });
 
     return () => {

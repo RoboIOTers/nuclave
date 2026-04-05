@@ -173,6 +173,13 @@ export async function updateContributionType(arenaId: string, contributionId: st
   return mapContributionRow(rows[0]);
 }
 
+export async function updateContributionContent(arenaId: string, contributionId: string, content: string): Promise<StoredContribution | undefined> {
+  const sql = getSql();
+  const rows = await sql`UPDATE contributions SET content = ${content} WHERE id = ${contributionId} AND arena_id = ${arenaId} RETURNING *`;
+  if (rows.length === 0) return undefined;
+  return mapContributionRow(rows[0]);
+}
+
 function mapContributionRow(row: Record<string, unknown>): StoredContribution {
   return {
     id: row.id as string,

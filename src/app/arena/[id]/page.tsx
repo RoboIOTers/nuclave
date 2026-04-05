@@ -8,7 +8,8 @@ import { SummaryPanel } from '@/components/arena/summary-panel';
 import { ArenaHeader } from '@/components/arena/arena-header';
 import { PhaseStepper } from '@/components/arena/phase-stepper';
 import { MobileSummaryToggle } from '@/components/arena/mobile-summary-toggle';
-import { Filter, Loader2, RefreshCw } from 'lucide-react';
+import { ClusterView } from '@/components/arena/cluster-view';
+import { Filter, Loader2, RefreshCw, LayoutList, LayoutGrid } from 'lucide-react';
 import type { ContributionType, SignalType, ArenaPhase, ArenaMode } from '@/types/arena';
 import { CONTRIBUTION_TYPES } from '@/types/arena';
 import { getUserToken } from '@/lib/utils/user-token';
@@ -63,6 +64,7 @@ export default function ArenaPage() {
   const [notFound, setNotFound] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'clusters'>('list');
   const [participantCount, setParticipantCount] = useState(1);
   const feedRef = useRef<HTMLDivElement>(null);
   const userToken = typeof window !== 'undefined' ? getUserToken() : 'server';
@@ -119,6 +121,11 @@ export default function ArenaPage() {
     }, []),
     onSummaryUpdated: useCallback((summaryData: Record<string, unknown>) => {
       setSummary(summaryData as unknown as Summary);
+    }, []),
+    onContributionEdited: useCallback((data: { contributionId: string; content: string }) => {
+      setContributions((prev) =>
+        prev.map((c) => (c.id === data.contributionId ? { ...c, content: data.content } : c))
+      );
     }, []),
   });
 
@@ -227,6 +234,26 @@ export default function ArenaPage() {
         });
       } catch {
         // Revert on failure — refetch
+        fetchArena();
+      }
+    },
+    [arenaId, fetchArena]
+  );
+
+  // ── Change contribution content via API ──
+  const handleContentChange = useCallback(
+    async (contributionId: string, newContent: string) => {
+      setContributions((prev) =>
+        prev.map((c) => (c.id === contributionId ? { ...c, content: newContent } : c))
+      );
+
+      try {
+        await fetch(`/api/arenas/${arenaId}/contributions/${contributionId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: newContent }),
+        });
+      } catch {
         fetchArena();
       }
     },
@@ -418,17 +445,41 @@ export default function ArenaPage() {
                 </button>
               );
             })}
-            <button
-              onClick={fetchArena}
-              title="Refresh"
-              className="ml-auto text-dim hover:text-ink transition-colors"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
+            {/* View toggle + refresh */}
+            <div className="flex items-center gap-1 ml-auto">
+              <button
+                onClick={() => setViewMode('list')}
+                title="List view"
+                className={`p-1 transition-colors ${viewMode === 'list' ? 'text-ink' : 'text-dim hover:text-ink'}`}
+              >
+                <LayoutList className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setViewMode('clusters')}
+                title="Cluster view"
+                className={`p-1 transition-colors ${viewMode === 'clusters' ? 'text-ink' : 'text-dim hover:text-ink'}`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={fetchArena}
+                title="Refresh"
+                className="p-1 text-dim hover:text-ink transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
-          {/* Feed */}
-          <div ref={feedRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+          {/* Cluster view */}
+          {viewMode === 'clusters' && (
+            <div className="flex-1 overflow-y-auto">
+              <ClusterView contributions={contributions} arenaId={arenaId} />
+            </div>
+          )}
+
+          {/* List feed */}
+          <div ref={feedRef} className={`flex-1 overflow-y-auto p-4 space-y-3 ${viewMode !== 'list' ? 'hidden' : ''}`}>
             {filtered.length === 0 && (
               <div className="py-12 px-4">
                 <p className="text-dim text-sm text-center mb-6">
@@ -457,6 +508,7 @@ export default function ArenaPage() {
               <ContributionCard
                 key={contribution.id}
                 id={contribution.id}
+                arenaId={arenaId}
                 type={contribution.type}
                 content={contribution.content}
                 isSkepticAi={contribution.isSkepticAi}
@@ -466,6 +518,7 @@ export default function ArenaPage() {
                 userSignal={userSignals[contribution.id] ?? null}
                 onSignal={handleSignal}
                 onTypeChange={handleTypeChange}
+                onContentChange={handleContentChange}
                 showSignals={showSignals}
               />
             ))}
