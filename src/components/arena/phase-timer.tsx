@@ -50,7 +50,7 @@ export function PhaseTimer({ phaseStartedAt, phaseDurationMinutes, onTimerExpire
           ? 'text-risk animate-pulse'
           : isUrgent
             ? 'text-accent'
-            : 'text-paper/60'
+            : 'text-ink'
       }`}
     >
       <Timer className="w-3.5 h-3.5" />
