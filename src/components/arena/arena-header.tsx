@@ -87,8 +87,12 @@ export function ArenaHeader({
     }
   };
 
-  const handleExport = (format: 'markdown' | 'json') => {
-    window.open(`/api/arenas/${arenaId}/export?format=${format}`, '_blank');
+  const handleExport = (format: 'markdown' | 'json' | 'pdf') => {
+    if (format === 'pdf') {
+      window.open(`/api/arenas/${arenaId}/export/pdf`, '_blank');
+    } else {
+      window.open(`/api/arenas/${arenaId}/export?format=${format}`, '_blank');
+    }
   };
 
   const phaseInfo = PHASE_LABELS[phase];
@@ -114,30 +118,6 @@ export function ArenaHeader({
 
           {/* Right side */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Phase indicator + advance */}
-            <div className="flex items-center gap-0">
-              <span
-                className={`${phaseInfo.color} text-paper px-2 py-0.5 font-mono text-[10px] tracking-wider uppercase`}
-              >
-                {phaseInfo.label}
-              </span>
-              {/* Phase timer */}
-              <PhaseTimer
-                phaseStartedAt={phaseStartedAt ?? null}
-                phaseDurationMinutes={phaseDurationMinutes ?? null}
-                onTimerExpired={canAdvance ? advancePhase : undefined}
-              />
-              {canAdvance && (
-                <button
-                  onClick={advancePhase}
-                  title={`Advance to ${PHASE_LABELS[ARENA_PHASES[ARENA_PHASES.indexOf(phase as ArenaPhase) + 1]]?.shortLabel}`}
-                  className="bg-paper/10 hover:bg-paper/20 text-paper px-1.5 py-0.5 transition-colors"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
             {/* Mode */}
             <span className="flex items-center gap-1 text-paper/50 text-xs">
               {mode === 'live' ? <Zap className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
@@ -171,6 +151,13 @@ export function ArenaHeader({
                 className="flex items-center bg-paper/10 hover:bg-paper/20 text-paper px-2 py-1.5 text-[10px] font-mono transition-colors border-l border-paper/10"
               >
                 JSON
+              </button>
+              <button
+                onClick={() => handleExport('pdf')}
+                title="Export as PDF"
+                className="flex items-center bg-paper/10 hover:bg-paper/20 text-paper px-2 py-1.5 text-[10px] font-mono transition-colors border-l border-paper/10"
+              >
+                PDF
               </button>
             </div>
 

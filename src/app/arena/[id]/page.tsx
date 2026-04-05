@@ -6,7 +6,7 @@ import { ContributionInput } from '@/components/arena/contribution-input';
 import { ContributionCard } from '@/components/arena/contribution-card';
 import { SummaryPanel } from '@/components/arena/summary-panel';
 import { ArenaHeader } from '@/components/arena/arena-header';
-import { PhaseBanner } from '@/components/arena/phase-banner';
+import { PhaseStepper } from '@/components/arena/phase-stepper';
 import { MobileSummaryToggle } from '@/components/arena/mobile-summary-toggle';
 import { Filter, Loader2, RefreshCw } from 'lucide-react';
 import type { ContributionType, SignalType, ArenaPhase, ArenaMode } from '@/types/arena';
@@ -35,6 +35,9 @@ interface ArenaData {
   isAnonymous: boolean;
   participantCount: number;
   contributions: Contribution[];
+  template?: string | null;
+  phaseStartedAt?: string | null;
+  phaseDurationMinutes?: number | null;
 }
 
 interface Summary {
@@ -318,14 +321,30 @@ export default function ArenaPage() {
         phase={arena?.phase ?? 'ideation'}
         isAnonymous={arena?.isAnonymous ?? true}
         participantCount={participantCount}
-        onPhaseChange={(newPhase) => {
-          setArena((prev) => (prev ? { ...prev, phase: newPhase } : prev));
-        }}
       />
 
-      {/* Phase banner */}
+      {/* Phase stepper */}
       {arena?.phase && (
-        <PhaseBanner phase={arena.phase} />
+        <PhaseStepper
+          currentPhase={arena.phase}
+          phaseStartedAt={arena.phaseStartedAt ?? null}
+          phaseDurationMinutes={arena.phaseDurationMinutes ?? null}
+          isFacilitator={true}
+          onPhaseSelect={async (phase) => {
+            try {
+              const res = await fetch(`/api/arenas/${arenaId}/phase`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phase, durationMinutes: null }),
+              });
+              if (res.ok) {
+                setArena((prev) => prev ? { ...prev, phase } : prev);
+              }
+            } catch {
+              // Silent
+            }
+          }}
+        />
       )}
 
       <div className="flex-1 flex max-w-7xl mx-auto w-full">
