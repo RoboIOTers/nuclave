@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getArena, getContributions, getSignalCounts } from '@/lib/store';
+import postgres from 'postgres';
+
+function getSql() {
+  const g = globalThis as unknown as { __nuclave_sql?: ReturnType<typeof postgres> };
+  if (!g.__nuclave_sql) {
+    g.__nuclave_sql = postgres(process.env.DATABASE_URL!, { max: 10, idle_timeout: 20 });
+  }
+  return g.__nuclave_sql;
+}
 
 /**
  * Returns a styled HTML page designed for browser Print → PDF.
@@ -41,6 +50,21 @@ export async function GET(
     decision: { label: 'Decision Points', emoji: '⚑', color: '#0d9488' },
     wildcard: { label: 'Wild Cards', emoji: '✦', color: '#d946ef' },
   };
+
+  // Fetch phase timing
+  const sql = getSql();
+  const arenaRows = await sql`SELECT phase_history FROM arenas WHERE id = ${id}`;
+  const phaseHistory = (arenaRows[0]?.phase_history as Array<{
+    phase: string; timeSpentSeconds: number; plannedSeconds: number | null; overtime: number;
+  }>) ?? [];
+
+  const formatMins = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}m ${s}s`;
+  };
+
+  const totalSessionTime = phaseHistory.reduce((sum, p) => sum + p.timeSpentSeconds, 0);
 
   // Build summary stats
   const totalAgree = contributions.reduce((sum, c) => sum + c.signals.agree, 0);
@@ -141,6 +165,29 @@ export async function GET(
     <div class="stat"><div class="num">${totalAgree}</div><div class="label">Total Agrees</div></div>
     <div class="stat"><div class="num">${totalCritical}</div><div class="label">Critical Flags</div></div>
   </div>
+
+  ${phaseHistory.length > 0 ? `
+  <div class="section" style="margin-bottom:20px;">
+    <h2 style="font-size:14px;font-weight:700;margin-bottom:10px;">Phase Timing</h2>
+    <table>
+      <tr><th>Phase</th><th style="width:100px">Planned</th><th style="width:100px">Actual</th><th style="width:100px">Overtime</th></tr>
+      ${phaseHistory.map((p) => `
+        <tr>
+          <td style="text-transform:capitalize">${escapeHtml(p.phase)}</td>
+          <td class="num">${p.plannedSeconds ? formatMins(p.plannedSeconds) : '—'}</td>
+          <td class="num">${formatMins(p.timeSpentSeconds)}</td>
+          <td class="num" ${p.overtime > 0 ? 'style="color:#dc2626;font-weight:600"' : ''}>${p.overtime > 0 ? '+' + formatMins(p.overtime) : '—'}</td>
+        </tr>
+      `).join('')}
+      <tr style="border-top:2px solid #1a1a1a;font-weight:600">
+        <td>Total</td>
+        <td class="num">${phaseHistory.some((p) => p.plannedSeconds) ? formatMins(phaseHistory.reduce((s, p) => s + (p.plannedSeconds ?? 0), 0)) : '—'}</td>
+        <td class="num">${formatMins(totalSessionTime)}</td>
+        <td class="num" ${phaseHistory.reduce((s, p) => s + p.overtime, 0) > 0 ? 'style="color:#dc2626;font-weight:600"' : ''}>${phaseHistory.reduce((s, p) => s + p.overtime, 0) > 0 ? '+' + formatMins(phaseHistory.reduce((s, p) => s + p.overtime, 0)) : '—'}</td>
+      </tr>
+    </table>
+  </div>
+  ` : ''}
 
   <div class="executive">
     <h2>Executive Summary</h2>

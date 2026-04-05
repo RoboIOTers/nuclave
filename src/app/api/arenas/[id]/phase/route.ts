@@ -47,6 +47,30 @@ export async function POST(
     }
 
     const sql = getSql();
+
+    // Record time spent in the previous phase
+    if (arena.phaseStartedAt) {
+      const prevStart = new Date(arena.phaseStartedAt).getTime();
+      const timeSpentSeconds = Math.floor((Date.now() - prevStart) / 1000);
+      const plannedSeconds = arena.phaseDurationMinutes ? arena.phaseDurationMinutes * 60 : null;
+
+      const historyEntry = {
+        phase: arena.phase,
+        startedAt: arena.phaseStartedAt,
+        endedAt: new Date().toISOString(),
+        timeSpentSeconds,
+        plannedSeconds,
+        overtime: plannedSeconds ? Math.max(0, timeSpentSeconds - plannedSeconds) : 0,
+      };
+
+      await sql`
+        UPDATE arenas SET
+          phase_history = COALESCE(phase_history, '[]'::jsonb) || ${JSON.stringify([historyEntry])}::jsonb
+        WHERE id = ${id}
+      `;
+    }
+
+    // Advance to new phase
     const rows = await sql`
       UPDATE arenas SET
         phase = ${phase},

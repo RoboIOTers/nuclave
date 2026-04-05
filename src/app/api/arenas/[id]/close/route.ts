@@ -10,10 +10,6 @@ function getSql() {
   return g.__nuclave_sql;
 }
 
-/**
- * POST /api/arenas/:id/close
- * Close an arena and generate a permanent decision record.
- */
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -26,6 +22,38 @@ export async function POST(
   }
 
   const sql = getSql();
+
+  // Record final phase time
+  if (arena.phaseStartedAt) {
+    const prevStart = new Date(arena.phaseStartedAt).getTime();
+    const timeSpentSeconds = Math.floor((Date.now() - prevStart) / 1000);
+    const plannedSeconds = arena.phaseDurationMinutes ? arena.phaseDurationMinutes * 60 : null;
+
+    const historyEntry = {
+      phase: arena.phase,
+      startedAt: arena.phaseStartedAt,
+      endedAt: new Date().toISOString(),
+      timeSpentSeconds,
+      plannedSeconds,
+      overtime: plannedSeconds ? Math.max(0, timeSpentSeconds - plannedSeconds) : 0,
+    };
+
+    await sql`
+      UPDATE arenas SET
+        phase_history = COALESCE(phase_history, '[]'::jsonb) || ${JSON.stringify([historyEntry])}::jsonb
+      WHERE id = ${id}
+    `;
+  }
+
+  // Fetch phase history
+  const arenaRows = await sql`SELECT phase_history FROM arenas WHERE id = ${id}`;
+  const phaseHistory = (arenaRows[0]?.phase_history as Array<{
+    phase: string;
+    timeSpentSeconds: number;
+    plannedSeconds: number | null;
+    overtime: number;
+  }>) ?? [];
+
   const rawContribs = await getContributions(id);
   const contributions = await Promise.all(
     rawContribs.map(async (c) => ({
@@ -34,7 +62,6 @@ export async function POST(
     }))
   );
 
-  // Classify contributions for decision record
   const agreed = contributions
     .filter((c) => c.signals.agree >= 2 && c.signals.challenge === 0)
     .map((c) => c.content)
@@ -61,7 +88,21 @@ export async function POST(
 
   const participantTokens = new Set(contributions.map((c) => c.authorToken));
 
-  const narrative = `This session produced ${contributions.length} contributions from ${participantTokens.size} participants. ${
+  // Build phase timing summary
+  const totalSeconds = phaseHistory.reduce((sum, p) => sum + p.timeSpentSeconds, 0);
+  const totalOvertime = phaseHistory.reduce((sum, p) => sum + p.overtime, 0);
+  const formatMins = (secs: number) => `${Math.floor(secs / 60)}m ${secs % 60}s`;
+
+  const phaseTimingSummary = phaseHistory.map((p) => {
+    const planned = p.plannedSeconds ? formatMins(p.plannedSeconds) : 'no limit';
+    const actual = formatMins(p.timeSpentSeconds);
+    const over = p.overtime > 0 ? ` (+${formatMins(p.overtime)} over)` : '';
+    return `${p.phase}: ${actual} (planned: ${planned})${over}`;
+  });
+
+  const narrative = `This session produced ${contributions.length} contributions from ${participantTokens.size} participants across ${phaseHistory.length} phases in ${formatMins(totalSeconds)} total. ${
+    totalOvertime > 0 ? `The session ran ${formatMins(totalOvertime)} over planned time. ` : ''
+  }${
     agreed.length > 0 ? `The group reached consensus on ${agreed.length} items.` : 'No clear consensus emerged.'
   } ${blockers.length > 0 ? `${blockers.length} blockers were identified.` : ''} ${
     questions.length > 0 ? `${questions.length} questions remain open.` : ''
@@ -95,6 +136,9 @@ export async function POST(
       blockers,
       nextActions,
       narrative,
+      phaseTimingSummary,
+      totalTime: formatMins(totalSeconds),
+      totalOvertime: totalOvertime > 0 ? formatMins(totalOvertime) : null,
       contributionCount: contributions.length,
       participantCount: participantTokens.size,
     },
