@@ -10,6 +10,7 @@ import { PhaseStepper } from '@/components/arena/phase-stepper';
 import { MobileSummaryToggle } from '@/components/arena/mobile-summary-toggle';
 import { ClusterView } from '@/components/arena/cluster-view';
 import { IdeasMap } from '@/components/arena/ideas-map';
+import { RelatedKnowledge } from '@/components/arena/related-knowledge';
 import { Filter, Loader2, RefreshCw, LayoutList, LayoutGrid, Waypoints } from 'lucide-react';
 import type { ContributionType, SignalType, ArenaPhase, ArenaMode } from '@/types/arena';
 import { CONTRIBUTION_TYPES } from '@/types/arena';
@@ -153,6 +154,9 @@ export default function ArenaPage() {
           emitContribution(data.data);
           feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
           setRateLimitError(null);
+        } else if (response.status === 403) {
+          const err = await response.json();
+          setRateLimitError(err.error || 'Contributor limit reached.');
         } else if (response.status === 429) {
           const err = await response.json();
           setRateLimitError(err.error || 'Too many contributions. Please wait.');
@@ -400,7 +404,12 @@ export default function ArenaPage() {
       <div className="flex-1 flex max-w-7xl mx-auto w-full">
         {/* Main feed */}
         <div className="flex-1 flex flex-col min-w-0 border-r border-border">
-          {/* Rate limit warning */}
+          {/* Institutional Memory — related past decisions */}
+          {arena?.title && (
+            <RelatedKnowledge arenaTitle={arena.title} arenaDescription={arena.description ?? null} />
+          )}
+
+          {/* Rate limit / tier limit warning */}
           {rateLimitError && (
             <div className="px-4 py-2 bg-accent/10 text-accent text-xs font-mono text-center">
               {rateLimitError}

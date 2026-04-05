@@ -4,6 +4,7 @@ import type { StoredContribution } from '@/lib/store';
 import type { ContributionType } from '@/types/arena';
 import { CONTRIBUTION_TYPES } from '@/types/arena';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getUserTier, getArenaContributorCount } from '@/lib/tier';
 
 export async function POST(
   request: NextRequest,
@@ -34,6 +35,26 @@ export async function POST(
           retryAfterMs: rateCheck.retryAfterMs,
         },
         { status: 429 }
+      );
+    }
+
+    // Check contributor limit (free tier = 5)
+    const creatorTier = await getUserTier(arena.creatorToken);
+    const currentContributors = await getArenaContributorCount(arenaId);
+    const isExistingContributor = (await getContributions(arenaId)).some(
+      (c) => c.authorToken === (authorToken || 'anonymous')
+    );
+    if (!isExistingContributor && currentContributors >= creatorTier.maxContributors) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `This arena has reached its limit of ${creatorTier.maxContributors} contributors. ${
+            creatorTier.tier === 'free' ? 'Upgrade to Pro for up to 50 contributors.' : ''
+          }`,
+          limitReached: true,
+          tier: creatorTier.tier,
+        },
+        { status: 403 }
       );
     }
 

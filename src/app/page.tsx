@@ -156,7 +156,7 @@ export default function HomePage() {
             Start your first Arena
           </h2>
           <p className="text-paper/60 text-lg mb-8 max-w-xl mx-auto">
-            Free forever for teams of 10. No account required to participate.
+            Free forever for teams of 5. No account required to participate.
             Open source. Self-hostable.
           </p>
           <div className="flex justify-center gap-4 flex-wrap">

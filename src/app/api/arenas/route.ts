@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createArena, getAllArenas, getArenasByCreator, type StoredArena } from '@/lib/store';
 import type { ArenaType, ArenaMode } from '@/types/arena';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getUserTier, getActiveArenaCount } from '@/lib/tier';
 
 function generateJoinCode(): string {
   const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -24,6 +25,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Too many arenas created. Please wait before creating another.' },
         { status: 429 }
+      );
+    }
+
+    // Check arena creation limit
+    const userTier = await getUserTier(creatorToken || 'anonymous');
+    const activeCount = await getActiveArenaCount(creatorToken || 'anonymous');
+    if (activeCount >= userTier.maxArenas) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `You've reached your limit of ${userTier.maxArenas} active arenas. ${
+            userTier.tier === 'free' ? 'Close an arena or upgrade to Pro for unlimited.' : ''
+          }`,
+          limitReached: true,
+          tier: userTier.tier,
+        },
+        { status: 403 }
       );
     }
 

@@ -126,6 +126,15 @@ export async function POST(
   // Update arena status
   await sql`UPDATE arenas SET status = 'closed', phase = 'closed', updated_at = now() WHERE id = ${id}`;
 
+  // Store in Institutional Memory (non-blocking)
+  try {
+    const { storeArenaKnowledge } = await import('@/lib/knowledge');
+    const tags = [...new Set(contributions.map((c) => c.type))];
+    await storeArenaKnowledge(id, arena.title, narrative, agreed, blockers, tags);
+  } catch {
+    // Knowledge storage is non-critical
+  }
+
   return NextResponse.json({
     success: true,
     data: {
