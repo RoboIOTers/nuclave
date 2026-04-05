@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle, AlertTriangle, HelpCircle, Shield, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertTriangle, HelpCircle, Shield, Loader2, RefreshCw } from 'lucide-react';
 
 interface SummaryPanelProps {
   summary: {
@@ -13,6 +13,7 @@ interface SummaryPanelProps {
   contributionCount: number;
   participantCount: number;
   isLoading: boolean;
+  onRefresh?: () => void;
 }
 
 export function SummaryPanel({
@@ -20,12 +21,25 @@ export function SummaryPanel({
   contributionCount,
   participantCount,
   isLoading,
+  onRefresh,
 }: SummaryPanelProps) {
   return (
     <div className="border border-border bg-card h-full flex flex-col">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border bg-ink text-paper">
-        <h3 className="font-display font-bold text-sm">Live Summary</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="font-display font-bold text-sm">Live Summary</h3>
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={isLoading}
+              className="text-paper/40 hover:text-paper transition-colors disabled:opacity-30"
+              title="Refresh summary"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+          )}
+        </div>
         <div className="flex gap-4 mt-1">
           <span className="font-mono text-[10px] text-paper/50">
             {contributionCount} contributions
@@ -37,18 +51,35 @@ export function SummaryPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
-        {isLoading && (
+        {isLoading && !summary && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-5 h-5 text-dim animate-spin" />
             <span className="ml-2 text-xs text-dim">Generating summary...</span>
           </div>
         )}
 
-        {!summary && !isLoading && (
+        {!summary && !isLoading && contributionCount === 0 && (
           <div className="text-center py-8">
             <p className="text-sm text-dim">
-              Summary will appear once contributions start coming in.
+              Summary will appear once contributions start.
             </p>
+          </div>
+        )}
+
+        {!summary && !isLoading && contributionCount > 0 && (
+          <div className="text-center py-8">
+            <p className="text-sm text-dim mb-3">
+              {contributionCount} contribution{contributionCount > 1 ? 's' : ''} so far.
+            </p>
+            {onRefresh && (
+              <button
+                onClick={onRefresh}
+                className="inline-flex items-center gap-1.5 bg-ink text-paper px-4 py-2 text-xs font-semibold"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Generate Summary
+              </button>
+            )}
           </div>
         )}
 
@@ -101,6 +132,14 @@ export function SummaryPanel({
                 title="Open Questions"
                 items={summary.unresolvedQuestions}
               />
+            )}
+
+            {/* Refresh hint */}
+            {isLoading && (
+              <div className="flex items-center gap-2 text-[10px] text-dim">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Updating...
+              </div>
             )}
           </>
         )}

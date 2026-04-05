@@ -38,6 +38,7 @@ interface ArenaHeaderProps {
   phaseDurationMinutes?: number | null;
   templatePhaseDurations?: Record<string, number> | null;
   onPhaseChange?: (phase: ArenaPhase) => void;
+  onClose?: () => void;
 }
 
 export function ArenaHeader({
@@ -52,6 +53,7 @@ export function ArenaHeader({
   phaseDurationMinutes,
   templatePhaseDurations,
   onPhaseChange,
+  onClose,
 }: ArenaHeaderProps) {
   const [copied, setCopied] = useState(false);
 
@@ -178,6 +180,20 @@ export function ArenaHeader({
                 </>
               )}
             </button>
+
+            {/* Close Arena */}
+            {onClose && phase !== 'closed' && (
+              <button
+                onClick={() => {
+                  if (confirm('Close this arena? This will generate a decision record and end the session.')) {
+                    onClose();
+                  }
+                }}
+                className="flex items-center gap-1.5 bg-paper/10 hover:bg-risk/80 hover:text-paper text-paper/50 px-3 py-1.5 text-xs font-mono transition-colors"
+              >
+                End
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -257,12 +257,12 @@ export default function ArenaPage() {
     }
   }, [arenaId, contributions]);
 
-  // Auto-summary when 3+ contributions
+  // Auto-summary when first contribution arrives
   useEffect(() => {
-    if (contributions.length >= 3 && !summary) {
+    if (contributions.length >= 1 && !summary && !isSummaryLoading) {
       requestSummary();
     }
-  }, [contributions.length, summary, requestSummary]);
+  }, [contributions.length, summary, isSummaryLoading, requestSummary]);
 
   // Auto-refresh summary every 30s
   useEffect(() => {
@@ -321,6 +321,16 @@ export default function ArenaPage() {
         phase={arena?.phase ?? 'ideation'}
         isAnonymous={arena?.isAnonymous ?? true}
         participantCount={participantCount}
+        onClose={async () => {
+          try {
+            const res = await fetch(`/api/arenas/${arenaId}/close`, { method: 'POST' });
+            if (res.ok) {
+              setArena((prev) => prev ? { ...prev, phase: 'decision' as ArenaPhase, status: 'closed' } : prev);
+              // Redirect to decision document
+              window.open(`/api/arenas/${arenaId}/export/pdf`, '_blank');
+            }
+          } catch { /* silent */ }
+        }}
       />
 
       {/* Phase stepper */}
@@ -451,6 +461,7 @@ export default function ArenaPage() {
               contributionCount={contributions.length}
               participantCount={participantCount}
               isLoading={isSummaryLoading}
+              onRefresh={requestSummary}
             />
           </div>
         </div>
@@ -462,6 +473,7 @@ export default function ArenaPage() {
         contributionCount={contributions.length}
         participantCount={participantCount}
         isLoading={isSummaryLoading}
+        onRefresh={requestSummary}
       />
     </div>
   );

@@ -15,6 +15,7 @@ interface MobileSummaryToggleProps {
   contributionCount: number;
   participantCount: number;
   isLoading: boolean;
+  onRefresh?: () => void;
 }
 
 export function MobileSummaryToggle({
@@ -22,6 +23,7 @@ export function MobileSummaryToggle({
   contributionCount,
   participantCount,
   isLoading,
+  onRefresh,
 }: MobileSummaryToggleProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -66,6 +68,7 @@ export function MobileSummaryToggle({
                 contributionCount={contributionCount}
                 participantCount={participantCount}
                 isLoading={isLoading}
+                onRefresh={onRefresh}
               />
             </div>
           </div>

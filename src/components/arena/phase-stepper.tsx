@@ -56,9 +56,8 @@ export function PhaseStepper({
                     !isFacilitator ? 'cursor-default' : ''
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">{meta.label}</span>
-                  <span className="sm:hidden">{i + 1}</span>
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span className="text-[10px] sm:text-xs">{meta.label}</span>
 
                   {/* Completed checkmark */}
                   {isPast && (

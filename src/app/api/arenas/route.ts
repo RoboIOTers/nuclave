@@ -37,6 +37,8 @@ export async function POST(request: NextRequest) {
       maxContributors: Math.min(Math.max(maxContributors || 10, 2), 500),
       creatorToken: creatorToken || 'anonymous',
       template: template || null,
+      phaseStartedAt: new Date().toISOString(),
+      phaseDurationMinutes: null,
       createdAt: new Date().toISOString(),
     };
 
