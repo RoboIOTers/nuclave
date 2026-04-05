@@ -130,6 +130,7 @@ export function ContributionCard({
           <div className="flex items-center gap-1 shrink-0">
             <SignalButton
               icon={ThumbsUp}
+              label="Agree"
               count={signals.agree}
               isActive={userSignal === 'agree'}
               onClick={() => onSignal(id, 'agree')}
@@ -137,6 +138,7 @@ export function ContributionCard({
             />
             <SignalButton
               icon={Zap}
+              label="Important"
               count={signals.critical}
               isActive={userSignal === 'critical'}
               onClick={() => onSignal(id, 'critical')}
@@ -144,6 +146,7 @@ export function ContributionCard({
             />
             <SignalButton
               icon={MessageCircleQuestion}
+              label="Disagree"
               count={signals.challenge}
               isActive={userSignal === 'challenge'}
               onClick={() => onSignal(id, 'challenge')}
@@ -158,12 +161,14 @@ export function ContributionCard({
 
 function SignalButton({
   icon: Icon,
+  label,
   count,
   isActive,
   onClick,
   activeColor,
 }: {
   icon: typeof ThumbsUp;
+  label: string;
   count: number;
   isActive: boolean;
   onClick: () => void;
@@ -173,11 +178,13 @@ function SignalButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center gap-1 px-1.5 py-1 text-xs transition-colors rounded-sm ${
+      title={label}
+      className={`flex items-center gap-1 px-2 py-1 text-[11px] transition-colors rounded-sm ${
         isActive ? activeColor : 'text-dim/50 hover:text-ink hover:bg-paper'
       }`}
     >
       <Icon className="w-3.5 h-3.5" />
+      <span className="hidden sm:inline">{label}</span>
       {count > 0 && <span className="font-mono text-[10px]">{count}</span>}
     </button>
   );
