@@ -9,7 +9,8 @@ import { ArenaHeader } from '@/components/arena/arena-header';
 import { PhaseStepper } from '@/components/arena/phase-stepper';
 import { MobileSummaryToggle } from '@/components/arena/mobile-summary-toggle';
 import { ClusterView } from '@/components/arena/cluster-view';
-import { Filter, Loader2, RefreshCw, LayoutList, LayoutGrid } from 'lucide-react';
+import { IdeasMap } from '@/components/arena/ideas-map';
+import { Filter, Loader2, RefreshCw, LayoutList, LayoutGrid, Waypoints } from 'lucide-react';
 import type { ContributionType, SignalType, ArenaPhase, ArenaMode } from '@/types/arena';
 import { CONTRIBUTION_TYPES } from '@/types/arena';
 import { getUserToken } from '@/lib/utils/user-token';
@@ -64,7 +65,7 @@ export default function ArenaPage() {
   const [notFound, setNotFound] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'clusters'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'map' | 'clusters'>('list');
   const [participantCount, setParticipantCount] = useState(1);
   const feedRef = useRef<HTMLDivElement>(null);
   const userToken = typeof window !== 'undefined' ? getUserToken() : 'server';
@@ -457,13 +458,22 @@ export default function ArenaPage() {
                 List
               </button>
               <button
+                onClick={() => setViewMode('map')}
+                className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-mono border-l border-border transition-colors ${
+                  viewMode === 'map' ? 'bg-ink text-paper' : 'text-dim hover:text-ink'
+                }`}
+              >
+                <Waypoints className="w-3.5 h-3.5" />
+                Map
+              </button>
+              <button
                 onClick={() => setViewMode('clusters')}
                 className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-mono border-l border-border transition-colors ${
                   viewMode === 'clusters' ? 'bg-ink text-paper' : 'text-dim hover:text-ink'
                 }`}
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
-                Ideas Map
+                Clusters
               </button>
             </div>
             <button
@@ -475,7 +485,14 @@ export default function ArenaPage() {
             </button>
           </div>
 
-          {/* Cluster view */}
+          {/* Ideas Map — force-directed bubble visualization */}
+          {viewMode === 'map' && (
+            <div className="flex-1 overflow-hidden bg-ink/95">
+              <IdeasMap contributions={contributions} arenaId={arenaId} />
+            </div>
+          )}
+
+          {/* Cluster view — grouped cards */}
           {viewMode === 'clusters' && (
             <div className="flex-1 overflow-y-auto">
               <ClusterView contributions={contributions} arenaId={arenaId} />
