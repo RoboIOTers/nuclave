@@ -4,33 +4,54 @@
 
 ## Project Overview
 Nuclave is an open-source, real-time collaborative structured brainstorming platform.
-Contributors submit ideas tagged by type, and AI continuously deduplicates, clusters,
-and summarizes contributions into actionable intelligence.
+Contributors type a thought, AI auto-classifies it, the group signals what matters,
+and the session ends with a structured decision document.
 
 ## Tech Stack
-- **Framework**: Next.js 15 (App Router, TypeScript)
+- **Framework**: Next.js 16 (App Router, TypeScript)
 - **Styling**: Tailwind CSS v4 with custom theme (ink/paper/accent palette)
-- **Database**: PostgreSQL + Drizzle ORM + pgvector (for embeddings)
-- **Real-time**: Socket.io + Redis Pub/Sub (planned)
-- **AI**: Pluggable providers — Anthropic Claude, OpenAI, Ollama (local)
+- **Database**: PostgreSQL 17 + pgvector (embeddings for deduplication)
+- **Queries**: Raw SQL via `postgres` library (not Drizzle queries — schema only)
+- **Real-time**: Socket.io via custom server (server.ts)
+- **AI**: Pluggable — Anthropic Claude, OpenAI, Ollama. Local keyword classifier as zero-cost default.
+- **Auth**: Custom OAuth (GitHub, Google) + anonymous guest tokens
 - **Self-hosting**: Docker Compose (PostgreSQL + Redis + App)
 
 ## Key Directories
-- `src/app/` — Next.js App Router pages and API routes
-- `src/components/arena/` — Arena UI components (contribution input, cards, summary)
-- `src/lib/ai/` — AI provider abstraction (classification, dedup, summary, skeptic)
-- `src/lib/db/` — Drizzle ORM schema and database client
-- `src/types/` — Shared TypeScript types (arena, contribution, signal types)
+- `src/app/` — Next.js App Router: pages + 30 API routes
+- `src/app/api/arenas/` — Arena CRUD, contributions, signals, phase, export, close, skeptic, participants
+- `src/app/api/auth/` — GitHub + Google OAuth, sessions
+- `src/app/api/integrations/` — Slack webhook
+- `src/components/arena/` — Arena UI: input, cards, stepper, timer, summary, header
+- `src/lib/ai/` — Providers (anthropic, openai, ollama), classifier, skeptic, dedup engine
+- `src/lib/store.ts` — PostgreSQL-backed data store (all DB queries here)
+- `src/lib/auth.ts` — OAuth + session management
+- `src/lib/templates.ts` — 6 arena templates
+- `src/types/arena.ts` — Core TypeScript types
 
 ## Architecture Decisions
-- **Monorepo, single deployable** — no separate Python microservice for AI
-- **In-memory store for MVP** — API routes use in-memory Maps; migrate to Drizzle+PG
-- **Structured tagging at input** — all contributions must have a type (8 types)
+- **Single deployable** — No separate microservices. AI calls external APIs from TypeScript.
+- **PostgreSQL-backed store** — `src/lib/store.ts` wraps raw SQL. Data persists across restarts.
+- **Zero-friction input** — User types and presses Enter. AI classifies AFTER submit, not before.
+- **Socket.io custom server** — `server.ts` attaches Socket.io to Next.js HTTP server
+- **globalThis for singletons** — DB connection and Socket.io instance stored on globalThis
 - **AGPL-3.0 license** — open-source core, cloud premium (PostHog model)
+
+## Database
+- PostgreSQL 17 on localhost:5432, database `nuclave`, user `nuclave`
+- Tables: arenas, contributions, signals, participants, decisions, auth_users, auth_sessions
+- pgvector extension installed for embedding similarity search
+- Schema managed via Drizzle (generation only), queries via raw SQL in store.ts
 
 ## Commands
 - `npm run dev` — Start development server
 - `npm run build` — Production build
-- `npx drizzle-kit generate` — Generate DB migrations
-- `npx drizzle-kit push` — Push schema to database
-- `docker compose up` — Start full stack (PG + Redis + App)
+- `npm run start:realtime` — Production with Socket.io (uses server.ts)
+- `npx drizzle-kit generate` — Generate migration SQL
+- `docker compose up` — Full stack (PG + Redis + App)
+
+## Live Deployment
+- Running at https://nuclave.com on port 3002 behind nginx
+- Server started with: `DATABASE_URL="postgres://nuclave:nuclave_dev_2026@127.0.0.1:5432/nuclave" NODE_ENV=production npx tsx server.ts`
+- nginx config at /etc/nginx/sites-enabled/nuclave.com
+- SSL via Let's Encrypt (auto-renew)
