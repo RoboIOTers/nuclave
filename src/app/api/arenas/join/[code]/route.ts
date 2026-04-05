@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: Promise<{ code: string }> }
 ) {
   const { code } = await params;
-  const arena = getArenaByJoinCode(code);
+  const arena = await getArenaByJoinCode(code);
 
   if (!arena) {
     return NextResponse.json(

@@ -7,6 +7,7 @@ import { ContributionCard } from '@/components/arena/contribution-card';
 import { SummaryPanel } from '@/components/arena/summary-panel';
 import { ArenaHeader } from '@/components/arena/arena-header';
 import { PhaseBanner } from '@/components/arena/phase-banner';
+import { MobileSummaryToggle } from '@/components/arena/mobile-summary-toggle';
 import { Filter, Loader2, RefreshCw } from 'lucide-react';
 import type { ContributionType, SignalType, ArenaPhase, ArenaMode } from '@/types/arena';
 import { CONTRIBUTION_TYPES } from '@/types/arena';
@@ -199,6 +200,28 @@ export default function ArenaPage() {
       }
     },
     [arenaId, userToken]
+  );
+
+  // ── Change contribution type via API ──
+  const handleTypeChange = useCallback(
+    async (contributionId: string, newType: ContributionType) => {
+      // Optimistic update
+      setContributions((prev) =>
+        prev.map((c) => (c.id === contributionId ? { ...c, type: newType } : c))
+      );
+
+      try {
+        await fetch(`/api/arenas/${arenaId}/contributions/${contributionId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: newType }),
+        });
+      } catch {
+        // Revert on failure — refetch
+        fetchArena();
+      }
+    },
+    [arenaId, fetchArena]
   );
 
   // ── Request summary ──
@@ -394,13 +417,14 @@ export default function ArenaPage() {
                 signals={contribution.signals}
                 userSignal={userSignals[contribution.id] ?? null}
                 onSignal={handleSignal}
+                onTypeChange={handleTypeChange}
                 showSignals={showSignals}
               />
             ))}
           </div>
         </div>
 
-        {/* Summary panel */}
+        {/* Summary panel — desktop sidebar */}
         <div className="w-80 hidden lg:block shrink-0">
           <div className="sticky top-0 h-screen overflow-hidden">
             <SummaryPanel
@@ -412,6 +436,14 @@ export default function ArenaPage() {
           </div>
         </div>
       </div>
+
+      {/* Summary panel — mobile bottom sheet toggle */}
+      <MobileSummaryToggle
+        summary={summary}
+        contributionCount={contributions.length}
+        participantCount={participantCount}
+        isLoading={isSummaryLoading}
+      />
     </div>
   );
 }

@@ -8,7 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const arena = getArena(id);
+  const arena = await getArena(id);
 
   if (!arena) {
     return NextResponse.json(
@@ -28,7 +28,7 @@ export async function POST(
       );
     }
 
-    const updated = updateArenaPhase(id, phase as ArenaPhase);
+    const updated = await updateArenaPhase(id, phase as ArenaPhase);
     return NextResponse.json({ success: true, data: updated });
   } catch {
     return NextResponse.json(

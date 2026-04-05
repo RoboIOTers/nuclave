@@ -27,7 +27,7 @@ export async function POST(
       );
     }
 
-    const result = toggleSignal(contributionId, userToken, type as SignalType);
+    const result = await toggleSignal(contributionId, userToken, type as SignalType);
 
     return NextResponse.json({ success: true, data: result });
   } catch {

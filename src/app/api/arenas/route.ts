@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    createArena(arena);
+    await createArena(arena);
 
     return NextResponse.json({ success: true, data: arena }, { status: 201 });
   } catch {
@@ -50,5 +50,5 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  return NextResponse.json({ success: true, data: getAllArenas() });
+  return NextResponse.json({ success: true, data: await getAllArenas() });
 }

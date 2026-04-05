@@ -1,19 +1,21 @@
 /**
- * In-memory global store for MVP.
- * Uses globalThis to persist across Next.js serverless function invocations.
- * Will be replaced by PostgreSQL + Drizzle in production.
+ * Data store backed by PostgreSQL.
+ * Same interface as the original in-memory store, now persistent.
  */
 
-import type { ContributionType, SignalType, ArenaType, ArenaMode, ArenaPhase } from '@/types/arena';
+import postgres from 'postgres';
+import type { ContributionType, SignalType, ArenaPhase } from '@/types/arena';
+
+// ── Types ──
 
 export interface StoredArena {
   id: string;
   title: string;
   description: string | null;
-  type: ArenaType;
-  mode: ArenaMode;
-  phase: ArenaPhase;
-  status: 'draft' | 'active' | 'paused' | 'closed';
+  type: string;
+  mode: string;
+  phase: string;
+  status: string;
   isAnonymous: boolean;
   joinCode: string;
   contextDocument: string | null;
@@ -42,126 +44,173 @@ export interface StoredSignal {
   createdAt: string;
 }
 
-interface GlobalStore {
-  arenas: Map<string, StoredArena>;
-  contributions: Map<string, StoredContribution[]>; // keyed by arenaId
-  signals: Map<string, StoredSignal[]>; // keyed by contributionId
-}
+// ── Connection ──
 
-const globalForStore = globalThis as unknown as { __nuclave_store?: GlobalStore };
+const globalForSql = globalThis as unknown as { __nuclave_sql?: ReturnType<typeof postgres> };
 
-function getStore(): GlobalStore {
-  if (!globalForStore.__nuclave_store) {
-    globalForStore.__nuclave_store = {
-      arenas: new Map(),
-      contributions: new Map(),
-      signals: new Map(),
-    };
+function getSql() {
+  if (!globalForSql.__nuclave_sql) {
+    const url = process.env.DATABASE_URL;
+    if (!url) {
+      throw new Error('DATABASE_URL is required');
+    }
+    globalForSql.__nuclave_sql = postgres(url, { max: 10, idle_timeout: 20 });
   }
-  return globalForStore.__nuclave_store;
+  return globalForSql.__nuclave_sql;
 }
 
 // ── Arena operations ──
 
-export function createArena(arena: StoredArena): StoredArena {
-  const store = getStore();
-  store.arenas.set(arena.id, arena);
-  store.contributions.set(arena.id, []);
+export async function createArena(arena: StoredArena): Promise<StoredArena> {
+  const sql = getSql();
+  await sql`
+    INSERT INTO arenas (id, title, description, type, mode, phase, status, is_anonymous, join_code, context_document, max_contributors, created_at)
+    VALUES (${arena.id}, ${arena.title}, ${arena.description}, ${arena.type}, ${arena.mode}, ${arena.phase}, ${arena.status}, ${arena.isAnonymous}, ${arena.joinCode}, ${arena.contextDocument}, ${arena.maxContributors}, ${arena.createdAt})
+  `;
   return arena;
 }
 
-export function getArena(id: string): StoredArena | undefined {
-  return getStore().arenas.get(id);
+export async function getArena(id: string): Promise<StoredArena | undefined> {
+  const sql = getSql();
+  const rows = await sql`SELECT * FROM arenas WHERE id = ${id}`;
+  if (rows.length === 0) return undefined;
+  return mapArenaRow(rows[0]);
 }
 
-export function getArenaByJoinCode(code: string): StoredArena | undefined {
-  const store = getStore();
-  for (const arena of store.arenas.values()) {
-    if (arena.joinCode === code) return arena;
-  }
-  return undefined;
+export async function getArenaByJoinCode(code: string): Promise<StoredArena | undefined> {
+  const sql = getSql();
+  const rows = await sql`SELECT * FROM arenas WHERE join_code = ${code}`;
+  if (rows.length === 0) return undefined;
+  return mapArenaRow(rows[0]);
 }
 
-export function getAllArenas(): StoredArena[] {
-  return Array.from(getStore().arenas.values()).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+export async function getAllArenas(): Promise<StoredArena[]> {
+  const sql = getSql();
+  const rows = await sql`SELECT * FROM arenas ORDER BY created_at DESC LIMIT 50`;
+  return rows.map(mapArenaRow);
 }
 
-export function updateArenaPhase(id: string, phase: ArenaPhase): StoredArena | undefined {
-  const store = getStore();
-  const arena = store.arenas.get(id);
-  if (!arena) return undefined;
-  const updated = { ...arena, phase };
-  store.arenas.set(id, updated);
-  return updated;
+export async function updateArenaPhase(id: string, phase: ArenaPhase): Promise<StoredArena | undefined> {
+  const sql = getSql();
+  const rows = await sql`UPDATE arenas SET phase = ${phase}, updated_at = now() WHERE id = ${id} RETURNING *`;
+  if (rows.length === 0) return undefined;
+  return mapArenaRow(rows[0]);
+}
+
+function mapArenaRow(row: Record<string, unknown>): StoredArena {
+  return {
+    id: row.id as string,
+    title: row.title as string,
+    description: row.description as string | null,
+    type: row.type as string,
+    mode: row.mode as string,
+    phase: row.phase as string,
+    status: row.status as string,
+    isAnonymous: row.is_anonymous as boolean,
+    joinCode: row.join_code as string,
+    contextDocument: row.context_document as string | null,
+    maxContributors: row.max_contributors as number,
+    createdAt: (row.created_at as Date).toISOString(),
+  };
 }
 
 // ── Contribution operations ──
 
-export function addContribution(contribution: StoredContribution): StoredContribution {
-  const store = getStore();
-  const list = store.contributions.get(contribution.arenaId) ?? [];
-  list.unshift(contribution); // newest first
-  store.contributions.set(contribution.arenaId, list);
+export async function addContribution(contribution: StoredContribution): Promise<StoredContribution> {
+  const sql = getSql();
+  await sql`
+    INSERT INTO contributions (id, arena_id, type, content, author_token, is_skeptic_ai, is_pinned, is_hidden, cluster_id, created_at)
+    VALUES (${contribution.id}, ${contribution.arenaId}, ${contribution.type}, ${contribution.content}, ${contribution.authorToken}, ${contribution.isSkepticAi}, ${contribution.isPinned}, ${contribution.isHidden}, ${contribution.clusterId}, ${contribution.createdAt})
+  `;
   return contribution;
 }
 
-export function getContributions(arenaId: string): StoredContribution[] {
-  return getStore().contributions.get(arenaId) ?? [];
+export async function getContributions(arenaId: string): Promise<StoredContribution[]> {
+  const sql = getSql();
+  const rows = await sql`SELECT * FROM contributions WHERE arena_id = ${arenaId} ORDER BY created_at DESC`;
+  return rows.map(mapContributionRow);
+}
+
+export async function updateContributionType(arenaId: string, contributionId: string, type: ContributionType): Promise<StoredContribution | undefined> {
+  const sql = getSql();
+  const rows = await sql`UPDATE contributions SET type = ${type} WHERE id = ${contributionId} AND arena_id = ${arenaId} RETURNING *`;
+  if (rows.length === 0) return undefined;
+  return mapContributionRow(rows[0]);
+}
+
+function mapContributionRow(row: Record<string, unknown>): StoredContribution {
+  return {
+    id: row.id as string,
+    arenaId: row.arena_id as string,
+    type: row.type as ContributionType,
+    content: row.content as string,
+    authorToken: row.author_token as string,
+    isSkepticAi: row.is_skeptic_ai as boolean,
+    isPinned: row.is_pinned as boolean,
+    isHidden: row.is_hidden as boolean,
+    clusterId: row.cluster_id as string | null,
+    createdAt: (row.created_at as Date).toISOString(),
+  };
 }
 
 // ── Signal operations ──
 
-export function toggleSignal(
+export async function toggleSignal(
   contributionId: string,
   userToken: string,
   type: SignalType
-): { action: 'added' | 'changed' | 'removed'; signal: StoredSignal | null } {
-  const store = getStore();
-  const list = store.signals.get(contributionId) ?? [];
+): Promise<{ action: 'added' | 'changed' | 'removed'; signal: StoredSignal | null }> {
+  const sql = getSql();
 
-  const existingIndex = list.findIndex((s) => s.userToken === userToken);
+  const existing = await sql`SELECT * FROM signals WHERE contribution_id = ${contributionId} AND user_token = ${userToken}`;
 
-  if (existingIndex >= 0) {
-    const existing = list[existingIndex];
-    if (existing.type === type) {
-      // Remove — toggle off
-      list.splice(existingIndex, 1);
-      store.signals.set(contributionId, list);
+  if (existing.length > 0) {
+    if (existing[0].type === type) {
+      // Toggle off
+      await sql`DELETE FROM signals WHERE id = ${existing[0].id}`;
       return { action: 'removed', signal: null };
     }
-    // Change signal type
-    const updated: StoredSignal = { ...existing, type };
-    list[existingIndex] = updated;
-    store.signals.set(contributionId, list);
-    return { action: 'changed', signal: updated };
+    // Change type
+    const rows = await sql`UPDATE signals SET type = ${type} WHERE id = ${existing[0].id} RETURNING *`;
+    return { action: 'changed', signal: mapSignalRow(rows[0]) };
   }
 
-  // Add new
-  const signal: StoredSignal = {
-    id: crypto.randomUUID(),
-    contributionId,
-    userToken,
-    type,
-    createdAt: new Date().toISOString(),
-  };
-  list.push(signal);
-  store.signals.set(contributionId, list);
-  return { action: 'added', signal };
+  // New signal
+  const rows = await sql`
+    INSERT INTO signals (contribution_id, user_token, type)
+    VALUES (${contributionId}, ${userToken}, ${type})
+    RETURNING *
+  `;
+  return { action: 'added', signal: mapSignalRow(rows[0]) };
 }
 
-export function getSignalCounts(contributionId: string): Record<SignalType, number> {
-  const list = getStore().signals.get(contributionId) ?? [];
+export async function getSignalCounts(contributionId: string): Promise<Record<SignalType, number>> {
+  const sql = getSql();
+  const rows = await sql`
+    SELECT type, COUNT(*)::int as count
+    FROM signals
+    WHERE contribution_id = ${contributionId}
+    GROUP BY type
+  `;
   const counts: Record<SignalType, number> = { agree: 0, critical: 0, challenge: 0 };
-  for (const s of list) {
-    counts[s.type]++;
+  for (const row of rows) {
+    counts[row.type as SignalType] = row.count as number;
   }
   return counts;
 }
 
-export function getUserSignal(contributionId: string, userToken: string): SignalType | null {
-  const list = getStore().signals.get(contributionId) ?? [];
-  const found = list.find((s) => s.userToken === userToken);
-  return found?.type ?? null;
+export async function getUserSignal(contributionId: string, userToken: string): Promise<SignalType | null> {
+  const sql = getSql();
+  const rows = await sql`SELECT type FROM signals WHERE contribution_id = ${contributionId} AND user_token = ${userToken}`;
+  return rows.length > 0 ? (rows[0].type as SignalType) : null;
+}
+
+function mapSignalRow(row: Record<string, unknown>): StoredSignal {
+  return {
+    id: row.id as string,
+    contributionId: row.contribution_id as string,
+    userToken: row.user_token as string,
+    type: row.type as SignalType,
+    createdAt: (row.created_at as Date).toISOString(),
+  };
 }

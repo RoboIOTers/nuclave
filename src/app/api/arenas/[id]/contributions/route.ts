@@ -9,7 +9,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: arenaId } = await params;
-  const arena = getArena(arenaId);
+  const arena = await getArena(arenaId);
 
   if (!arena) {
     return NextResponse.json(
@@ -49,7 +49,7 @@ export async function POST(
       createdAt: new Date().toISOString(),
     };
 
-    addContribution(contribution);
+    await addContribution(contribution);
 
     return NextResponse.json(
       {
@@ -71,7 +71,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: arenaId } = await params;
-  const arena = getArena(arenaId);
+  const arena = await getArena(arenaId);
 
   if (!arena) {
     return NextResponse.json(
@@ -80,10 +80,13 @@ export async function GET(
     );
   }
 
-  const contributions = getContributions(arenaId).map((c) => ({
-    ...c,
-    signals: getSignalCounts(c.id),
-  }));
+  const rawContributions = await getContributions(arenaId);
+  const contributions = await Promise.all(
+    rawContributions.map(async (c) => ({
+      ...c,
+      signals: await getSignalCounts(c.id),
+    }))
+  );
 
   return NextResponse.json({ success: true, data: contributions });
 }

@@ -10,7 +10,6 @@ import {
   pgEnum,
   index,
   uniqueIndex,
-  vector,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -152,7 +151,7 @@ export const contributions = pgTable(
     parentContributionId: uuid('parent_contribution_id'),
     clusterId: uuid('cluster_id'),
     consensusScore: integer('consensus_score'),
-    embedding: vector('embedding', { dimensions: 1536 }),
+    // embedding: vector('embedding', { dimensions: 1536 }), // Requires pgvector extension
     isHidden: boolean('is_hidden').default(false).notNull(),
     isPinned: boolean('is_pinned').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

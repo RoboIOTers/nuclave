@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const arena = getArena(id);
+  const arena = await getArena(id);
 
   if (!arena) {
     return NextResponse.json(
@@ -15,10 +15,13 @@ export async function GET(
     );
   }
 
-  const contributions = getContributions(id).map((c) => ({
-    ...c,
-    signals: getSignalCounts(c.id),
-  }));
+  const rawContributions = await getContributions(id);
+  const contributions = await Promise.all(
+    rawContributions.map(async (c) => ({
+      ...c,
+      signals: await getSignalCounts(c.id),
+    }))
+  );
 
   return NextResponse.json({
     success: true,

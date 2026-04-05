@@ -95,8 +95,17 @@ export function classifyLocally(content: string): {
     }
   }
 
-  // If no pattern matched strongly, default to "feature" (generic idea)
+  // If no pattern matched strongly, use sentiment heuristic
   if (maxScore <= 1) {
+    const negative = /\b(not|don't|won't|can't|shouldn't|isn't|doesn't|never|no one|nobody|nothing|bad|wrong|broken|terrible|awful|hate|sucks|annoying|frustrat|confus|fail|miss|lack|poor|weak)\b/i;
+    const positive = /\b(good|nice|cool|great|like|love|works|helpful|useful|enjoy|happy|glad|sweet|solid)\b/i;
+
+    if (negative.test(trimmed)) {
+      return { type: 'risk', confidence: 0.4 };
+    }
+    if (positive.test(trimmed)) {
+      return { type: 'benefit', confidence: 0.4 };
+    }
     return { type: 'feature', confidence: 0.2 };
   }
 
