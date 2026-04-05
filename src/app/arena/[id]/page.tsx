@@ -42,6 +42,7 @@ interface ArenaData {
   phaseDurations?: Record<string, number> | null;
   phaseStartedAt?: string | null;
   phaseDurationMinutes?: number | null;
+  aiEnabled?: boolean;
 }
 
 interface Summary {
@@ -422,6 +423,7 @@ export default function ArenaPage() {
               onSubmit={handleContribution}
               disabled={isSubmitting}
               arenaDescription={arena?.description ?? null}
+              aiEnabled={arena?.aiEnabled !== false}
             />
           </div>
 
@@ -550,6 +552,7 @@ export default function ArenaPage() {
                 onTypeChange={handleTypeChange}
                 onContentChange={handleContentChange}
                 showSignals={showSignals}
+                aiEnabled={arena?.aiEnabled !== false}
               />
             ))}
           </div>

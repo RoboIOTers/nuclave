@@ -52,6 +52,7 @@ interface ContributionCardProps {
   onTypeChange?: (contributionId: string, newType: ContributionType) => void;
   onContentChange?: (contributionId: string, newContent: string) => void;
   showSignals: boolean;
+  aiEnabled?: boolean;
 }
 
 export function ContributionCard({
@@ -68,6 +69,7 @@ export function ContributionCard({
   onTypeChange,
   onContentChange,
   showSignals,
+  aiEnabled = true,
 }: ContributionCardProps) {
   const [isEditingType, setIsEditingType] = useState(false);
   const [isEditingContent, setIsEditingContent] = useState(false);
@@ -180,11 +182,11 @@ export function ContributionCard({
             <button onClick={cancelEdit} className="text-[11px] text-dim hover:underline">Cancel</button>
             <button
               onClick={requestAiImprove}
-              disabled={isLoadingSuggestion}
+              disabled={isLoadingSuggestion || !aiEnabled}
               className="flex items-center gap-1 text-[11px] text-accent-2 hover:underline ml-auto disabled:opacity-40"
             >
               {isLoadingSuggestion ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
-              Improve with AI
+              {aiEnabled ? 'Improve with AI' : 'AI disabled'}
             </button>
           </div>
         </div>

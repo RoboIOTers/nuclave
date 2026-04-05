@@ -43,10 +43,11 @@ export async function POST(
     const result = await toggleSignal(contributionId, userToken, type as SignalType);
 
     // Auto-trigger Skeptic AI when agree count hits threshold during debate+
+    // Only if AI is enabled for this arena
     if (result.action === 'added' && type === 'agree') {
       try {
         const arena = await getArena(arenaId);
-        if (arena && arena.phase !== 'ideation') {
+        if (arena && arena.aiEnabled !== false && arena.phase !== 'ideation') {
           const signals = await getSignalCounts(contributionId);
           if (signals.agree >= 2) {
             const allContribs = await getContributions(arenaId);

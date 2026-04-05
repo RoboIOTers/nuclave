@@ -3,10 +3,14 @@ import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
-    const { content, authorToken } = await request.json();
+    const { content, authorToken, aiEnabled } = await request.json();
 
     if (!content?.trim()) {
       return NextResponse.json({ success: false, error: 'Content is required' }, { status: 400 });
+    }
+
+    if (aiEnabled === false) {
+      return NextResponse.json({ success: true, data: { improved: null, reason: 'AI is disabled for this arena to protect data privacy.' } });
     }
 
     // Rate limit: 10 improve requests per user per minute

@@ -16,7 +16,7 @@ function generateJoinCode(): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { title, description, type, mode, isAnonymous, maxContributors, contextDocument, creatorToken, template, phaseDurations } = body;
+    const { title, description, type, mode, isAnonymous, maxContributors, contextDocument, creatorToken, template, phaseDurations, aiEnabled } = body;
 
     // Rate limit: max 5 arenas per user per hour
     const rateKey = `arena-create:${creatorToken || 'anonymous'}`;
@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
       phaseDurations: phaseDurations || null,
       phaseStartedAt: new Date().toISOString(),
       phaseDurationMinutes: phaseDurations?.ideation ?? null,
+      aiEnabled: aiEnabled !== false,
       createdAt: new Date().toISOString(),
     };
 

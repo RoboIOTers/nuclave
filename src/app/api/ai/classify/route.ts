@@ -4,7 +4,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
-    const { content, authorToken } = await request.json();
+    const { content, authorToken, aiEnabled } = await request.json();
 
     if (!content?.trim()) {
       return NextResponse.json(
@@ -13,24 +13,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Rate limit: max 15 classifications per user per minute
-    const ip = request.headers.get('x-real-ip') ?? request.headers.get('x-forwarded-for') ?? 'unknown';
-    const rateKey = `classify:${authorToken || ip}`;
-    const rateCheck = checkRateLimit(rateKey, 15, 60_000);
-    if (!rateCheck.allowed) {
-      // Fall back to local classifier silently — don't burn AI credits
+    // If AI is disabled for this arena, use local only
+    if (aiEnabled === false) {
       const local = classifyLocally(content);
       return NextResponse.json({ success: true, data: { ...local, source: 'local' } });
     }
 
-    // Try AI classification if configured, fall back to local
+    // Rate limit
+    const ip = request.headers.get('x-real-ip') ?? request.headers.get('x-forwarded-for') ?? 'unknown';
+    const rateKey = `classify:${authorToken || ip}`;
+    const rateCheck = checkRateLimit(rateKey, 15, 60_000);
+    if (!rateCheck.allowed) {
+      const local = classifyLocally(content);
+      return NextResponse.json({ success: true, data: { ...local, source: 'local' } });
+    }
+
+    // Try AI classification
     let result;
     try {
       const { classifyContribution } = await import('@/lib/ai/engine');
       const aiResult = await classifyContribution(content, 'feature');
       result = { type: aiResult.suggestedType, confidence: aiResult.confidence, source: 'ai' };
     } catch {
-      // AI not configured — use local keyword classifier
       const local = classifyLocally(content);
       result = { ...local, source: 'local' };
     }

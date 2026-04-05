@@ -25,6 +25,7 @@ export interface StoredArena {
   phaseDurations: Record<string, number> | null;
   phaseStartedAt: string | null;
   phaseDurationMinutes: number | null;
+  aiEnabled: boolean;
   createdAt: string;
 }
 
@@ -69,8 +70,8 @@ function getSql() {
 export async function createArena(arena: StoredArena): Promise<StoredArena> {
   const sql = getSql();
   await sql`
-    INSERT INTO arenas (id, title, description, type, mode, phase, status, is_anonymous, join_code, context_document, max_contributors, creator_token, phase_durations, phase_started_at, phase_duration_minutes, created_at)
-    VALUES (${arena.id}, ${arena.title}, ${arena.description}, ${arena.type}, ${arena.mode}, ${arena.phase}, ${arena.status}, ${arena.isAnonymous}, ${arena.joinCode}, ${arena.contextDocument}, ${arena.maxContributors}, ${arena.creatorToken}, ${arena.phaseDurations ? JSON.stringify(arena.phaseDurations) : null}, ${arena.phaseStartedAt}, ${arena.phaseDurationMinutes}, ${arena.createdAt})
+    INSERT INTO arenas (id, title, description, type, mode, phase, status, is_anonymous, join_code, context_document, max_contributors, creator_token, phase_durations, phase_started_at, phase_duration_minutes, ai_enabled, created_at)
+    VALUES (${arena.id}, ${arena.title}, ${arena.description}, ${arena.type}, ${arena.mode}, ${arena.phase}, ${arena.status}, ${arena.isAnonymous}, ${arena.joinCode}, ${arena.contextDocument}, ${arena.maxContributors}, ${arena.creatorToken}, ${arena.phaseDurations ? JSON.stringify(arena.phaseDurations) : null}, ${arena.phaseStartedAt}, ${arena.phaseDurationMinutes}, ${arena.aiEnabled}, ${arena.createdAt})
   `;
   return arena;
 }
@@ -145,6 +146,7 @@ function mapArenaRow(row: Record<string, unknown>): StoredArena {
     phaseDurations: (row.phase_durations as Record<string, number>) ?? null,
     phaseStartedAt: row.phase_started_at ? (row.phase_started_at as Date).toISOString() : null,
     phaseDurationMinutes: (row.phase_duration_minutes as number) ?? null,
+    aiEnabled: (row.ai_enabled as boolean) ?? true,
     createdAt: (row.created_at as Date).toISOString(),
   };
 }

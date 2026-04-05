@@ -8,9 +8,10 @@ interface ContributionInputProps {
   onSubmit: (type: ContributionType, content: string) => void;
   disabled?: boolean;
   arenaDescription?: string | null;
+  aiEnabled?: boolean;
 }
 
-export function ContributionInput({ onSubmit, disabled, arenaDescription }: ContributionInputProps) {
+export function ContributionInput({ onSubmit, disabled, arenaDescription, aiEnabled = true }: ContributionInputProps) {
   const [content, setContent] = useState('');
   const [isClassifying, setIsClassifying] = useState(false);
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
@@ -28,7 +29,7 @@ export function ContributionInput({ onSubmit, disabled, arenaDescription }: Cont
       const res = await fetch('/api/ai/classify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: trimmed }),
+        body: JSON.stringify({ content: trimmed, aiEnabled }),
       });
 
       let type: ContributionType = 'feature';
@@ -83,7 +84,7 @@ export function ContributionInput({ onSubmit, disabled, arenaDescription }: Cont
       </div>
       <div className="px-3 pb-2">
         <span className="text-[10px] text-dim/50">
-          Press Enter to submit &middot; AI auto-categorizes your input
+          Press Enter to submit &middot; {aiEnabled ? 'AI auto-categorizes your input' : 'Auto-categorized locally (AI off for privacy)'}
         </span>
       </div>
     </div>

@@ -42,6 +42,7 @@ export default function CreateArenaPage() {
     description: '',
     mode: 'live' as ArenaMode,
     isAnonymous: true,
+    aiEnabled: true,
     maxContributors: 10,
     contextDocument: '',
   });
@@ -76,6 +77,7 @@ export default function CreateArenaPage() {
           creatorToken: getUserToken(),
           template: selectedTemplate?.id ?? null,
           phaseDurations: selectedTemplate?.phaseDurations ?? null,
+          aiEnabled: formData.aiEnabled,
         }),
       });
 
@@ -225,6 +227,29 @@ export default function CreateArenaPage() {
                   </button>
                 </div>
               </div>
+              {/* AI toggle */}
+              <div>
+                <label className="block font-mono text-[10px] tracking-wider uppercase text-dim mb-1.5">AI Features</label>
+                <button
+                  type="button"
+                  onClick={() => updateField('aiEnabled', !formData.aiEnabled)}
+                  className={`w-full flex items-center justify-center gap-1.5 border py-2 text-xs font-medium transition-colors ${
+                    formData.aiEnabled ? 'border-accent-2 bg-accent-2/5 text-accent-2' : 'border-accent bg-accent/5 text-accent'
+                  }`}
+                >
+                  {formData.aiEnabled ? (
+                    <><Zap className="w-3.5 h-3.5" /> AI On — data sent to OpenAI</>
+                  ) : (
+                    <><EyeOff className="w-3.5 h-3.5" /> AI Off — fully private</>
+                  )}
+                </button>
+                <p className="text-[9px] text-dim mt-1">
+                  {formData.aiEnabled
+                    ? 'Contributions are sent to OpenAI for classification, summaries, and suggestions.'
+                    : 'All processing stays on this server. No data leaves your infrastructure.'}
+                </p>
+              </div>
+
               <div>
                 <label className="block font-mono text-[10px] tracking-wider uppercase text-dim mb-1.5">Max contributors</label>
                 <div className="flex items-center gap-2 border border-border px-3 py-2">
