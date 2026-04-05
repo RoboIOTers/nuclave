@@ -446,29 +446,33 @@ export default function ArenaPage() {
               );
             })}
             {/* View toggle + refresh */}
-            <div className="flex items-center gap-1 ml-auto">
+            <div className="flex items-center gap-0 ml-auto border border-border">
               <button
                 onClick={() => setViewMode('list')}
-                title="List view"
-                className={`p-1 transition-colors ${viewMode === 'list' ? 'text-ink' : 'text-dim hover:text-ink'}`}
+                className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-mono transition-colors ${
+                  viewMode === 'list' ? 'bg-ink text-paper' : 'text-dim hover:text-ink'
+                }`}
               >
                 <LayoutList className="w-3.5 h-3.5" />
+                List
               </button>
               <button
                 onClick={() => setViewMode('clusters')}
-                title="Cluster view"
-                className={`p-1 transition-colors ${viewMode === 'clusters' ? 'text-ink' : 'text-dim hover:text-ink'}`}
+                className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-mono border-l border-border transition-colors ${
+                  viewMode === 'clusters' ? 'bg-ink text-paper' : 'text-dim hover:text-ink'
+                }`}
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={fetchArena}
-                title="Refresh"
-                className="p-1 text-dim hover:text-ink transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
+                Ideas Map
               </button>
             </div>
+            <button
+              onClick={fetchArena}
+              title="Refresh"
+              className="p-1 text-dim hover:text-ink transition-colors ml-1"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           {/* Cluster view */}
