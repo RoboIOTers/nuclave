@@ -14,7 +14,7 @@ function generateJoinCode(): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { title, description, type, mode, isAnonymous, maxContributors, contextDocument, creatorToken, template } = body;
+    const { title, description, type, mode, isAnonymous, maxContributors, contextDocument, creatorToken, template, phaseDurations } = body;
 
     if (!title?.trim()) {
       return NextResponse.json(
@@ -37,8 +37,9 @@ export async function POST(request: NextRequest) {
       maxContributors: Math.min(Math.max(maxContributors || 10, 2), 500),
       creatorToken: creatorToken || 'anonymous',
       template: template || null,
+      phaseDurations: phaseDurations || null,
       phaseStartedAt: new Date().toISOString(),
-      phaseDurationMinutes: null,
+      phaseDurationMinutes: phaseDurations?.ideation ?? null,
       createdAt: new Date().toISOString(),
     };
 

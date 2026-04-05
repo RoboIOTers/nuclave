@@ -36,6 +36,7 @@ interface ArenaData {
   participantCount: number;
   contributions: Contribution[];
   template?: string | null;
+  phaseDurations?: Record<string, number> | null;
   phaseStartedAt?: string | null;
   phaseDurationMinutes?: number | null;
 }
@@ -345,10 +346,16 @@ export default function ArenaPage() {
               const res = await fetch(`/api/arenas/${arenaId}/phase`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phase, durationMinutes: null }),
+                body: JSON.stringify({ phase }),
               });
               if (res.ok) {
-                setArena((prev) => prev ? { ...prev, phase } : prev);
+                const data = await res.json();
+                setArena((prev) => prev ? {
+                  ...prev,
+                  phase,
+                  phaseStartedAt: data.data?.phaseStartedAt ?? new Date().toISOString(),
+                  phaseDurationMinutes: data.data?.phaseDurationMinutes ?? null,
+                } : prev);
               }
             } catch {
               // Silent

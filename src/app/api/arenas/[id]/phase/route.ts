@@ -37,12 +37,21 @@ export async function POST(
       );
     }
 
+    // Auto-resolve duration: explicit > stored template > null
+    let resolvedDuration = durationMinutes ?? null;
+    if (resolvedDuration === null && arena.phaseDurations) {
+      const durations = typeof arena.phaseDurations === 'string'
+        ? JSON.parse(arena.phaseDurations as string)
+        : arena.phaseDurations;
+      resolvedDuration = durations[phase] ?? null;
+    }
+
     const sql = getSql();
     const rows = await sql`
       UPDATE arenas SET
         phase = ${phase},
         phase_started_at = now(),
-        phase_duration_minutes = ${durationMinutes ?? null},
+        phase_duration_minutes = ${resolvedDuration},
         updated_at = now()
       WHERE id = ${id}
       RETURNING *,

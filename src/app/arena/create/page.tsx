@@ -75,6 +75,7 @@ export default function CreateArenaPage() {
           type: selectedTemplate?.type ?? 'brainstorm',
           creatorToken: getUserToken(),
           template: selectedTemplate?.id ?? null,
+          phaseDurations: selectedTemplate?.phaseDurations ?? null,
         }),
       });
 
