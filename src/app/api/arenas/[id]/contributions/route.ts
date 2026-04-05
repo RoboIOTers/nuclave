@@ -51,10 +51,34 @@ export async function POST(
 
     await addContribution(contribution);
 
+    // Check for similar contributions (non-blocking)
+    let duplicates: Array<{ id: string; content: string; similarity: number }> = [];
+    try {
+      const { findSimilarByText } = await import('@/lib/ai/dedup');
+      duplicates = await findSimilarByText(arenaId, contribution.content, contribution.id);
+    } catch {
+      // Dedup is non-critical
+    }
+
+    // Try to generate and store embedding (non-blocking)
+    try {
+      const { getEmbeddingProvider } = await import('@/lib/ai/index');
+      const { storeEmbedding } = await import('@/lib/ai/dedup');
+      const embedder = getEmbeddingProvider();
+      const embedding = await embedder.embed(contribution.content);
+      await storeEmbedding(contribution.id, embedding);
+    } catch {
+      // Embedding is optional — works without API keys
+    }
+
     return NextResponse.json(
       {
         success: true,
-        data: { ...contribution, signals: { agree: 0, critical: 0, challenge: 0 } },
+        data: {
+          ...contribution,
+          signals: { agree: 0, critical: 0, challenge: 0 },
+          duplicates: duplicates.length > 0 ? duplicates : undefined,
+        },
       },
       { status: 201 }
     );
