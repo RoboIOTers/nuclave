@@ -1,31 +1,131 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-ink: #0d0d0f;
-  --color-paper: #f6f4ef;
-  --color-dim: #8a8880;
+  --color-ink: #0c0b0a;
+  --color-paper: #f5f0e6;
+  --color-dim: #7a756b;
   --color-accent: #e84a27;
-  --color-accent-2: #2563d4;
-  --color-accent-3: #16a34a;
-  --color-accent-4: #d97706;
-  --color-border: #dddbd5;
-  --color-card: #ffffff;
+  --color-accent-2: #3b82f6;
+  --color-accent-3: #22c55e;
+  --color-accent-4: #f59e0b;
+  --color-border: #2a2825;
+  --color-border-light: #ddd8cc;
+  --color-card: #161514;
+  --color-card-light: #ffffff;
+  --color-surface: #1c1b19;
+  --color-glow: #e84a27;
 
-  --color-benefit: #16a34a;
-  --color-risk: #dc2626;
-  --color-feature: #eab308;
-  --color-blocker: #b91c1c;
-  --color-checklist: #2563eb;
-  --color-question: #7c3aed;
-  --color-decision: #0d9488;
-  --color-wildcard: #d946ef;
+  --color-benefit: #22c55e;
+  --color-risk: #ef4444;
+  --color-feature: #f59e0b;
+  --color-blocker: #dc2626;
+  --color-checklist: #3b82f6;
+  --color-question: #a855f7;
+  --color-decision: #14b8a6;
+  --color-wildcard: #ec4899;
 
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-  --font-display: 'Syne', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-heading: 'Clash Display', 'DM Sans', ui-sans-serif, sans-serif;
 }
 
-body {
+/* Noise texture overlay */
+@layer base {
+  body {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+
+  ::selection {
+    background: var(--color-accent);
+    color: white;
+  }
+}
+
+/* Grain effect */
+.grain::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+/* Glow effect */
+.glow {
+  box-shadow: 0 0 60px -12px rgba(232, 74, 39, 0.3);
+}
+
+.glow-text {
+  text-shadow: 0 0 40px rgba(232, 74, 39, 0.4);
+}
+
+/* Smooth reveal animation */
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes reveal-scale {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.4; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.animate-reveal {
+  animation: reveal 0.6s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-reveal-scale {
+  animation: reveal-scale 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Stagger delays */
+.delay-1 { animation-delay: 0.1s; }
+.delay-2 { animation-delay: 0.2s; }
+.delay-3 { animation-delay: 0.3s; }
+.delay-4 { animation-delay: 0.4s; }
+.delay-5 { animation-delay: 0.5s; }
+.delay-6 { animation-delay: 0.6s; }
+.delay-7 { animation-delay: 0.7s; }
+.delay-8 { animation-delay: 0.8s; }
+
+/* Arena pages use light theme */
+.theme-light {
+  --color-border: #ddd8cc;
+  --color-card: #ffffff;
   background: var(--color-paper);
   color: var(--color-ink);
 }
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+.theme-light ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
