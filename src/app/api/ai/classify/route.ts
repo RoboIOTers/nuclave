@@ -1,15 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { classifyLocally } from '@/lib/ai/classify-local';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
-    const { content } = await request.json();
+    const { content, authorToken } = await request.json();
 
     if (!content?.trim()) {
       return NextResponse.json(
         { success: false, error: 'Content is required' },
         { status: 400 }
       );
+    }
+
+    // Rate limit: max 15 classifications per user per minute
+    const ip = request.headers.get('x-real-ip') ?? request.headers.get('x-forwarded-for') ?? 'unknown';
+    const rateKey = `classify:${authorToken || ip}`;
+    const rateCheck = checkRateLimit(rateKey, 15, 60_000);
+    if (!rateCheck.allowed) {
+      // Fall back to local classifier silently — don't burn AI credits
+      const local = classifyLocally(content);
+      return NextResponse.json({ success: true, data: { ...local, source: 'local' } });
     }
 
     // Try AI classification if configured, fall back to local

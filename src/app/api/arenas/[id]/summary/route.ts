@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit } from '@/lib/rate-limit';
 
-// MVP summary generator — uses the AI engine when available,
+// Summary generator — uses AI engine when available,
 // falls back to simple aggregation
 export async function POST(
   request: NextRequest,
@@ -8,6 +9,18 @@ export async function POST(
 ) {
   try {
     const { id: arenaId } = await params;
+
+    // Rate limit: max 3 summary requests per arena per minute
+    // This is the most expensive AI call
+    const rateKey = `summary:${arenaId}`;
+    const rateCheck = checkRateLimit(rateKey, 3, 60_000);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Summary was recently generated. Please wait.' },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { contributions } = body;
 
