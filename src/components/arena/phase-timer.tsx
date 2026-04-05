@@ -10,25 +10,31 @@ interface PhaseTimerProps {
 }
 
 export function PhaseTimer({ phaseStartedAt, phaseDurationMinutes, onTimerExpired }: PhaseTimerProps) {
+  const [elapsed, setElapsed] = useState(0);
   const [remaining, setRemaining] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!phaseStartedAt || !phaseDurationMinutes) {
-      setRemaining(null);
-      return;
-    }
+    if (!phaseStartedAt) return;
 
-    const endTime = new Date(phaseStartedAt).getTime() + phaseDurationMinutes * 60 * 1000;
+    const startTime = new Date(phaseStartedAt).getTime();
+    const hasCountdown = phaseDurationMinutes && phaseDurationMinutes > 0;
+    const endTime = hasCountdown ? startTime + phaseDurationMinutes * 60 * 1000 : null;
+    let expired = false;
 
     const tick = () => {
       const now = Date.now();
-      const diff = endTime - now;
-      if (diff <= 0) {
-        setRemaining(0);
-        onTimerExpired?.();
-        return;
+      setElapsed(Math.floor((now - startTime) / 1000));
+
+      if (endTime) {
+        const diff = endTime - now;
+        if (diff <= 0 && !expired) {
+          expired = true;
+          setRemaining(0);
+          onTimerExpired?.();
+        } else if (diff > 0) {
+          setRemaining(Math.ceil(diff / 1000));
+        }
       }
-      setRemaining(Math.ceil(diff / 1000));
     };
 
     tick();
@@ -36,12 +42,17 @@ export function PhaseTimer({ phaseStartedAt, phaseDurationMinutes, onTimerExpire
     return () => clearInterval(interval);
   }, [phaseStartedAt, phaseDurationMinutes, onTimerExpired]);
 
-  if (remaining === null) return null;
+  if (!phaseStartedAt) return null;
 
-  const mins = Math.floor(remaining / 60);
-  const secs = remaining % 60;
-  const isUrgent = remaining < 60;
-  const isExpired = remaining === 0;
+  const hasCountdown = remaining !== null;
+  const isUrgent = hasCountdown && remaining !== null && remaining < 60;
+  const isExpired = hasCountdown && remaining === 0;
+
+  const formatTime = (totalSecs: number) => {
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
     <div
@@ -54,12 +65,14 @@ export function PhaseTimer({ phaseStartedAt, phaseDurationMinutes, onTimerExpire
       }`}
     >
       <Timer className="w-3.5 h-3.5" />
-      {isExpired ? (
-        <span>Time&apos;s up</span>
+      {hasCountdown ? (
+        isExpired ? (
+          <span>Time&apos;s up</span>
+        ) : (
+          <span>{formatTime(remaining!)} left</span>
+        )
       ) : (
-        <span>
-          {mins}:{secs.toString().padStart(2, '0')}
-        </span>
+        <span>{formatTime(elapsed)}</span>
       )}
     </div>
   );

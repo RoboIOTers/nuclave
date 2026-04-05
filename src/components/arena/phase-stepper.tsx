@@ -83,8 +83,8 @@ export function PhaseStepper({
           })}
         </div>
 
-        {/* Timer bar — separate row, full width, only when active */}
-        {phaseStartedAt && phaseDurationMinutes && (
+        {/* Timer bar — always shows elapsed, shows countdown if duration set */}
+        {phaseStartedAt && (
           <div className="flex items-center justify-center gap-2 py-1.5 border-t border-border bg-ink/5">
             <PhaseTimer
               phaseStartedAt={phaseStartedAt}
@@ -96,7 +96,7 @@ export function PhaseStepper({
               }}
             />
             <span className="text-[10px] text-dim">
-              remaining in {PHASE_META[currentPhase]?.label}
+              {phaseDurationMinutes ? 'remaining' : 'elapsed'} in {PHASE_META[currentPhase]?.label}
             </span>
           </div>
         )}
