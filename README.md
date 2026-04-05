@@ -237,13 +237,16 @@ nuclave/
 │   │       └── integrations/slack/   # Slack webhook
 │   ├── components/arena/
 │   │   ├── contribution-input.tsx    # Zero-friction text input
-│   │   ├── contribution-card.tsx     # Card with editable type tag + signals
-│   │   ├── phase-stepper.tsx         # Visual 4-phase navigation bar
-│   │   ├── phase-timer.tsx           # Countdown timer per phase
-│   │   ├── summary-panel.tsx         # Live AI summary
+│   │   ├── contribution-card.tsx     # Card with inline editing + AI improve + signals
+│   │   ├── ideas-map.tsx            # Force-directed bubble visualization (d3-force)
+│   │   ├── cluster-view.tsx         # Grouped cards by theme/type
+│   │   ├── related-knowledge.tsx    # Institutional Memory banner
+│   │   ├── phase-stepper.tsx        # Visual 4-phase navigation bar
+│   │   ├── phase-timer.tsx          # Countdown + overtime counter
+│   │   ├── summary-panel.tsx        # Live AI summary
 │   │   ├── mobile-summary-toggle.tsx # Bottom sheet for mobile
-│   │   ├── arena-header.tsx          # Header with export, share, participants
-│   │   └── phase-banner.tsx          # Phase explanation banner
+│   │   ├── arena-header.tsx         # Header with export, share, end, participants
+│   │   └── phase-banner.tsx         # Phase explanation banner
 │   ├── lib/
 │   │   ├── ai/
 │   │   │   ├── providers/            # Anthropic, OpenAI, Ollama
@@ -255,6 +258,9 @@ nuclave/
 │   │   ├── realtime/                 # Socket.io client hook
 │   │   ├── store.ts                  # PostgreSQL-backed data store
 │   │   ├── auth.ts                   # OAuth + session management
+│   │   ├── knowledge.ts              # Institutional Memory (embedding search)
+│   │   ├── tier.ts                   # Free/Pro/Enterprise tier limits
+│   │   ├── rate-limit.ts             # In-memory rate limiter
 │   │   └── templates.ts              # 6 arena templates
 │   └── types/arena.ts                # Core type definitions
 ├── server.ts                         # Custom server with Socket.io
@@ -281,10 +287,14 @@ nuclave/
 | `GET` | `/api/arenas/:id/export?format=md\|json` | Export as Markdown or JSON |
 | `GET` | `/api/arenas/:id/export/pdf` | Export as branded PDF document |
 | `GET/POST` | `/api/arenas/:id/participants` | List/join participants with roles |
-| `POST` | `/api/ai/classify` | Auto-classify text content |
+| `POST` | `/api/ai/classify` | Auto-classify text (respects aiEnabled) |
+| `POST` | `/api/ai/improve` | AI rewrite suggestion |
 | `GET` | `/api/arenas/join/:code` | Look up arena by join code |
 | `GET` | `/api/dashboard?token=xxx` | User's arenas |
 | `GET` | `/api/decisions` | List all decision records |
+| `GET` | `/api/knowledge?q=query` | Search Institutional Memory |
+| `GET` | `/api/tier?token=xxx` | Check user's tier and limits |
+| `POST` | `/api/arenas/:id/clusters` | AI-powered thematic clustering |
 | `GET` | `/api/auth/github` | Start GitHub OAuth |
 | `GET` | `/api/auth/google` | Start Google OAuth |
 | `GET` | `/api/auth/me` | Get current user |
@@ -297,35 +307,43 @@ nuclave/
 - [x] Arena creation with structured contribution types
 - [x] Zero-friction input with AI auto-classification
 - [x] Manual type override (click tag to reclassify)
+- [x] Editable contributions with real-time sync
+- [x] AI writing suggestions ("Improve with AI")
 - [x] Real-time collaboration via Socket.io
 - [x] Phase-based sessions with visual stepper (bi-directional)
-- [x] Phase timer with countdown and auto-advance
-- [x] Signal system (Agree / Critical / Challenge)
+- [x] Phase timer (continues on revisit, overtime counter in red)
+- [x] Phase timing tracked per session (planned vs actual vs overtime)
+- [x] Signal system (Agree / Important / Disagree)
 - [x] Weighted voting by participant role
 - [x] Live Summary Panel (desktop sidebar + mobile bottom sheet)
 - [x] Skeptic AI — auto-triggers during debate phase
 - [x] Semantic deduplication (pgvector + Jaccard fallback)
-- [x] Export: Markdown, JSON, branded PDF
+- [x] Ideas Map — force-directed bubble visualization (d3-force)
+- [x] Cluster view — AI-grouped or type-grouped cards
+- [x] Export: Markdown, JSON, branded PDF with phase timing
 - [x] Decision log — permanent records from closed arenas
-- [x] Arena templates (6 pre-built)
+- [x] Institutional Memory — surfaces related past decisions
+- [x] Arena templates (6 pre-built with phase durations)
 - [x] Dashboard — browse all your arenas
 - [x] No-account guest participation via shareable links
 - [x] OAuth authentication (GitHub + Google)
 - [x] Slack webhook integration
 - [x] PostgreSQL persistence with pgvector
 - [x] Docker Compose self-hosting
+- [x] Per-arena AI toggle (AI On / AI Off for privacy)
+- [x] Free tier limits (5 contributors, 5 arenas)
+- [x] Rate limiting on all endpoints (anti-spam)
 
 ### Planned
-- [ ] Stripe billing (Pro tier)
-- [ ] Institutional Memory / Knowledge Graph
+- [ ] Stripe billing (Pro tier at $12/mo)
 - [ ] Jira, Linear, Notion export integrations
 - [ ] Embed mode (iframe for wikis)
 - [ ] Public arena directory
 - [ ] Slack bot (create arenas from Slack)
 - [ ] Contribution threading
-- [ ] Heatmap visualization
 - [ ] Dark mode
 - [ ] Broadcast mode (200+ participants)
+- [ ] Notification system (email/push)
 
 ## Contributing
 
