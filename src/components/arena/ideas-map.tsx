@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   forceSimulation,
   forceLink,
@@ -69,7 +69,7 @@ const TYPE_LABELS: Record<ContributionType, string> = {
   wildcard: 'Wild',
 };
 
-// ── Similarity (Jaccard on words) ──
+// ── Similarity ──
 
 function wordSet(text: string): Set<string> {
   return new Set(
@@ -87,58 +87,64 @@ function jaccardSim(a: string, b: string): number {
   return union === 0 ? 0 : inter / union;
 }
 
-// ── Consensus color ──
+// ── Consensus glow ──
 
-function consensusColor(agree: number, challenge: number): string {
-  if (agree === 0 && challenge === 0) return 'rgba(255,255,255,0.03)';
+function consensusGlow(agree: number, challenge: number): string {
+  if (agree === 0 && challenge === 0) return 'rgba(255,255,255,0.02)';
   const total = agree + challenge;
   const ratio = agree / total;
-  if (ratio > 0.7) return `rgba(34,197,94,${Math.min(0.15, 0.05 + agree * 0.02)})`;
-  if (ratio < 0.3) return `rgba(239,68,68,${Math.min(0.15, 0.05 + challenge * 0.02)})`;
-  return `rgba(245,158,11,${Math.min(0.12, 0.04 + total * 0.01)})`;
+  if (ratio > 0.7) return `rgba(34,197,94,${Math.min(0.12, 0.03 + agree * 0.015)})`;
+  if (ratio < 0.3) return `rgba(239,68,68,${Math.min(0.12, 0.03 + challenge * 0.015)})`;
+  return `rgba(245,158,11,${Math.min(0.1, 0.03 + total * 0.01)})`;
 }
 
 // ── Component ──
 
-export function IdeasMap({ contributions, arenaId }: IdeasMapProps) {
+export function IdeasMap({ contributions }: IdeasMapProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const [nodes, setNodes] = useState<MapNode[]>([]);
-  const [links, setLinks] = useState<MapLink[]>([]);
-  const [hoveredNode, setHoveredNode] = useState<MapNode | null>(null);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
-  const animRef = useRef<number>(0);
   const simRef = useRef<ReturnType<typeof forceSimulation<MapNode>> | null>(null);
+  const nodesRef = useRef<MapNode[]>([]);
+  const linksRef = useRef<MapLink[]>([]);
+  const [, forceRender] = useState(0);
+  const [hoveredNode, setHoveredNode] = useState<MapNode | null>(null);
+  const [dims, setDims] = useState({ w: 800, h: 500 });
 
-  // Resize observer
+  // Resize
   useEffect(() => {
-    const el = svgRef.current?.parentElement;
+    const el = containerRef.current;
     if (!el) return;
-    const obs = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      setDimensions({ width: Math.max(400, width), height: Math.max(300, height) });
-    });
+    const measure = () => {
+      const { width, height } = el.getBoundingClientRect();
+      setDims({ w: Math.max(400, width), h: Math.max(350, height) });
+    };
+    measure();
+    const obs = new ResizeObserver(measure);
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
 
-  // Assign clusters by type
+  // Type cluster mapping
   const typeOrder = useMemo(() => {
     const types = [...new Set(contributions.map((c) => c.type))];
     return new Map(types.map((t, i) => [t, i]));
   }, [contributions]);
 
-  // Build nodes + links when contributions change
+  // Build graph data (only when contributions change by count)
+  const contribCount = contributions.length;
   useEffect(() => {
-    if (contributions.length === 0) {
-      setNodes([]);
-      setLinks([]);
-      return;
-    }
+    const { w, h } = dims;
 
-    const newNodes: MapNode[] = contributions.map((c) => {
+    // Stop old simulation
+    simRef.current?.stop();
+
+    // Build nodes
+    const newNodes: MapNode[] = contributions.map((c, i) => {
       const agree = c.signals.agree;
-      const baseRadius = 18;
-      const radius = baseRadius + Math.min(agree * 4, 30);
+      const radius = 16 + Math.min(agree * 3, 24);
+      // Start in a circle so they don't all spawn at 0,0
+      const angle = (i / Math.max(contributions.length, 1)) * 2 * Math.PI;
+      const startR = Math.min(w, h) * 0.2;
       return {
         id: c.id,
         type: c.type,
@@ -149,253 +155,182 @@ export function IdeasMap({ contributions, arenaId }: IdeasMapProps) {
         challenge: c.signals.challenge,
         radius,
         cluster: typeOrder.get(c.type) ?? 0,
+        x: w / 2 + Math.cos(angle) * startR,
+        y: h / 2 + Math.sin(angle) * startR,
       };
     });
 
-    // Find links based on text similarity
+    // Build links
     const newLinks: MapLink[] = [];
-    const SIM_THRESHOLD = 0.25;
     for (let i = 0; i < contributions.length; i++) {
       for (let j = i + 1; j < contributions.length; j++) {
         const sim = jaccardSim(contributions[i].content, contributions[j].content);
-        if (sim >= SIM_THRESHOLD) {
-          newLinks.push({
-            source: contributions[i].id,
-            target: contributions[j].id,
-            similarity: sim,
-          });
+        if (sim >= 0.2) {
+          newLinks.push({ source: newNodes[i], target: newNodes[j], similarity: sim });
         }
       }
     }
 
-    setNodes(newNodes);
-    setLinks(newLinks);
-  }, [contributions, typeOrder]);
+    nodesRef.current = newNodes;
+    linksRef.current = newLinks;
 
-  // Run force simulation
-  useEffect(() => {
-    if (nodes.length === 0) return;
+    // Cluster positions
+    const clusterCount = typeOrder.size || 1;
+    const clusterAngle = (idx: number) => (idx / clusterCount) * 2 * Math.PI;
+    const clusterR = Math.min(w, h) * 0.2;
+    const pad = 40;
 
-    const { width, height } = dimensions;
-    const clusterCount = typeOrder.size;
-
-    // Position cluster centers in a circle
-    const clusterAngle = (i: number) => (i / Math.max(clusterCount, 1)) * 2 * Math.PI;
-    const clusterRadius = Math.min(width, height) * 0.25;
-
-    const sim = forceSimulation<MapNode>(nodes)
-      .force('charge', forceManyBody<MapNode>().strength(-80))
-      .force('center', forceCenter(width / 2, height / 2))
-      .force('collision', forceCollide<MapNode>().radius((d) => d.radius + 3).strength(0.8))
+    // Simulation
+    const sim = forceSimulation<MapNode>(newNodes)
+      .force('charge', forceManyBody<MapNode>().strength(-30).distanceMax(200))
+      .force('center', forceCenter(w / 2, h / 2).strength(0.1))
+      .force('collision', forceCollide<MapNode>().radius((d) => d.radius + 4).strength(1))
       .force(
         'link',
-        forceLink<MapNode, MapLink>(links)
+        forceLink<MapNode, MapLink>(newLinks)
           .id((d) => d.id)
-          .distance(80)
-          .strength((l) => (l as MapLink).similarity * 0.5)
+          .distance(60)
+          .strength((l) => l.similarity * 0.3)
       )
-      .force(
-        'clusterX',
-        forceX<MapNode>((d) => width / 2 + Math.cos(clusterAngle(d.cluster)) * clusterRadius).strength(0.15)
-      )
-      .force(
-        'clusterY',
-        forceY<MapNode>((d) => height / 2 + Math.sin(clusterAngle(d.cluster)) * clusterRadius).strength(0.15)
-      )
-      .alphaDecay(0.02)
+      .force('clusterX', forceX<MapNode>((d) => w / 2 + Math.cos(clusterAngle(d.cluster)) * clusterR).strength(0.08))
+      .force('clusterY', forceY<MapNode>((d) => h / 2 + Math.sin(clusterAngle(d.cluster)) * clusterR).strength(0.08))
+      .velocityDecay(0.4)
+      .alphaDecay(0.03)
       .on('tick', () => {
-        setNodes((prev) => [...prev]);
+        // Clamp nodes inside bounds
+        for (const node of newNodes) {
+          node.x = Math.max(pad + node.radius, Math.min(w - pad - node.radius, node.x ?? w / 2));
+          node.y = Math.max(pad + node.radius, Math.min(h - pad - node.radius, node.y ?? h / 2));
+        }
+        forceRender((n) => n + 1);
       });
 
     simRef.current = sim;
 
-    return () => {
-      sim.stop();
-    };
-  }, [nodes.length, links.length, dimensions, typeOrder]);
+    return () => { sim.stop(); };
+  }, [contribCount, dims, typeOrder]);
+
+  const nodes = nodesRef.current;
+  const links = linksRef.current;
+  const { w, h } = dims;
 
   if (contributions.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-dim text-sm">
+      <div className="flex items-center justify-center h-full text-paper/40 text-sm">
         Add contributions to see the Ideas Map
       </div>
     );
   }
 
-  const { width, height } = dimensions;
-
   return (
-    <div className="relative w-full h-full min-h-[400px]">
+    <div ref={containerRef} className="relative w-full h-full min-h-[400px]">
       {/* Legend */}
       <div className="absolute top-3 left-3 z-10 flex flex-wrap gap-2">
         {[...typeOrder.entries()].map(([type]) => (
-          <div key={type} className="flex items-center gap-1.5 text-[10px] text-dim">
-            <span
-              className="w-2.5 h-2.5 rounded-full"
-              style={{ backgroundColor: TYPE_FILL[type] }}
-            />
+          <div key={type} className="flex items-center gap-1.5 text-[10px] text-paper/50">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: TYPE_FILL[type] }} />
             {TYPE_LABELS[type]}
           </div>
         ))}
       </div>
 
-      {/* Consensus legend */}
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-3 text-[9px] font-mono text-dim">
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-3 text-[9px] font-mono text-paper/30">
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-full" style={{ background: 'rgba(34,197,94,0.15)' }} />
+          <span className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(34,197,94,0.3)' }} />
           consensus
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-full" style={{ background: 'rgba(245,158,11,0.12)' }} />
+          <span className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(245,158,11,0.3)' }} />
           contested
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-full" style={{ background: 'rgba(239,68,68,0.15)' }} />
+          <span className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(239,68,68,0.3)' }} />
           disagreed
         </span>
       </div>
 
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${width} ${height}`}
-        className="w-full h-full"
-        style={{ minHeight: '400px' }}
-      >
-        {/* Consensus heatmap zones */}
-        {nodes.map((node) => {
-          if (!node.x || !node.y) return null;
-          const glow = consensusColor(node.agree, node.challenge);
-          const glowR = node.radius * 3;
-          return (
-            <circle
-              key={`heatmap-${node.id}`}
-              cx={node.x}
-              cy={node.y}
-              r={glowR}
-              fill={glow}
-              style={{ transition: 'cx 0.1s, cy 0.1s, r 0.3s' }}
-            />
-          );
-        })}
+      <svg ref={svgRef} width={w} height={h} className="w-full h-full">
+        {/* Consensus heatmap glow */}
+        {nodes.map((n) => (
+          <circle
+            key={`glow-${n.id}`}
+            cx={n.x ?? 0}
+            cy={n.y ?? 0}
+            r={n.radius * 2.5}
+            fill={consensusGlow(n.agree, n.challenge)}
+          />
+        ))}
 
-        {/* Connection lines */}
+        {/* Links */}
         {links.map((link, i) => {
-          const s = typeof link.source === 'object' ? link.source : nodes.find((n) => n.id === link.source);
-          const t = typeof link.target === 'object' ? link.target : nodes.find((n) => n.id === link.target);
-          if (!s?.x || !s?.y || !t?.x || !t?.y) return null;
+          const s = link.source as MapNode;
+          const t = link.target as MapNode;
+          if (!s.x || !s.y || !t.x || !t.y) return null;
           return (
             <line
-              key={`link-${i}`}
-              x1={s.x}
-              y1={s.y}
-              x2={t.x}
-              y2={t.y}
-              stroke="rgba(255,255,255,0.06)"
-              strokeWidth={1 + link.similarity * 3}
-              style={{ transition: 'x1 0.1s, y1 0.1s, x2 0.1s, y2 0.1s' }}
+              key={`l-${i}`}
+              x1={s.x} y1={s.y} x2={t.x} y2={t.y}
+              stroke="rgba(255,255,255,0.08)"
+              strokeWidth={1 + link.similarity * 2}
             />
           );
         })}
 
         {/* Nodes */}
-        {nodes.map((node) => {
-          if (!node.x || !node.y) return null;
-          const isHovered = hoveredNode?.id === node.id;
-          const fill = TYPE_FILL[node.type];
-
+        {nodes.map((n) => {
+          const isHov = hoveredNode?.id === n.id;
+          const fill = TYPE_FILL[n.type];
           return (
             <g
-              key={node.id}
-              onMouseEnter={() => setHoveredNode(node)}
+              key={n.id}
+              onMouseEnter={() => setHoveredNode(n)}
               onMouseLeave={() => setHoveredNode(null)}
-              style={{ cursor: 'pointer', transition: 'transform 0.1s' }}
+              style={{ cursor: 'pointer' }}
             >
-              {/* Outer ring for agree count */}
-              {node.agree > 0 && (
-                <circle
-                  cx={node.x}
-                  cy={node.y}
-                  r={node.radius + 3}
-                  fill="none"
-                  stroke={fill}
-                  strokeWidth={1.5}
-                  strokeOpacity={0.3}
-                  style={{ transition: 'cx 0.1s, cy 0.1s' }}
-                />
+              {/* Agree ring */}
+              {n.agree > 0 && (
+                <circle cx={n.x ?? 0} cy={n.y ?? 0} r={n.radius + 3}
+                  fill="none" stroke={fill} strokeWidth={1.5} strokeOpacity={0.3} />
               )}
-
               {/* Main bubble */}
               <circle
-                cx={node.x}
-                cy={node.y}
-                r={node.radius}
+                cx={n.x ?? 0} cy={n.y ?? 0} r={n.radius}
                 fill={fill}
-                fillOpacity={isHovered ? 0.9 : node.isSkepticAi ? 0.3 : 0.6}
-                stroke={isHovered ? '#fff' : 'none'}
+                fillOpacity={isHov ? 0.95 : n.isSkepticAi ? 0.35 : 0.65}
+                stroke={isHov ? '#fff' : 'none'}
                 strokeWidth={2}
-                style={{ transition: 'cx 0.1s, cy 0.1s, fill-opacity 0.2s' }}
               />
-
-              {/* Agree count */}
-              {node.agree > 0 && (
-                <text
-                  x={node.x}
-                  y={node.y + 1}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fill="#fff"
-                  fontSize={Math.max(10, node.radius * 0.5)}
-                  fontWeight="700"
-                  fontFamily="system-ui"
-                  style={{ transition: 'x 0.1s, y 0.1s', pointerEvents: 'none' }}
-                >
-                  +{node.agree}
-                </text>
-              )}
-
-              {/* Skeptic AI badge */}
-              {node.isSkepticAi && (
-                <text
-                  x={node.x}
-                  y={node.y + 1}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fill="#fff"
-                  fontSize={9}
-                  fontFamily="system-ui"
-                  style={{ transition: 'x 0.1s, y 0.1s', pointerEvents: 'none' }}
-                >
-                  AI
-                </text>
-              )}
+              {/* Label */}
+              <text
+                x={n.x ?? 0} y={n.y ?? 0}
+                textAnchor="middle" dominantBaseline="central"
+                fill="#fff" fontSize={Math.max(9, n.radius * 0.45)}
+                fontWeight="700" fontFamily="system-ui"
+                style={{ pointerEvents: 'none' }}
+              >
+                {n.agree > 0 ? `+${n.agree}` : n.isSkepticAi ? 'AI' : ''}
+              </text>
             </g>
           );
         })}
       </svg>
 
       {/* Tooltip */}
-      {hoveredNode && hoveredNode.x && hoveredNode.y && (
+      {hoveredNode && (
         <div
-          className="absolute z-20 bg-ink text-paper border border-white/10 px-3 py-2 text-xs max-w-[250px] pointer-events-none shadow-lg"
+          className="absolute z-20 bg-[#1a1918] text-paper border border-white/10 px-3 py-2.5 text-xs max-w-[260px] pointer-events-none shadow-xl"
           style={{
-            left: Math.min(hoveredNode.x + 15, width - 270),
-            top: hoveredNode.y - 10,
+            left: Math.min((hoveredNode.x ?? 0) + 20, w - 280),
+            top: Math.max(10, (hoveredNode.y ?? 0) - 15),
           }}
         >
-          <div className="flex items-center gap-1.5 mb-1">
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: TYPE_FILL[hoveredNode.type] }}
-            />
-            <span className="font-mono text-[10px] uppercase text-paper/50">
-              {TYPE_LABELS[hoveredNode.type]}
-            </span>
-            {hoveredNode.isSkepticAi && (
-              <span className="text-[9px] text-accent">Skeptic AI</span>
-            )}
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: TYPE_FILL[hoveredNode.type] }} />
+            <span className="font-mono text-[10px] uppercase text-paper/40">{TYPE_LABELS[hoveredNode.type]}</span>
+            {hoveredNode.isSkepticAi && <span className="text-[9px] text-accent">Skeptic AI</span>}
           </div>
-          <p className="text-paper/80 leading-relaxed">{hoveredNode.content}</p>
-          <div className="flex gap-3 mt-1.5 text-[10px] font-mono text-paper/40">
+          <p className="text-paper/80 leading-relaxed mb-1.5">{hoveredNode.content}</p>
+          <div className="flex gap-3 text-[10px] font-mono text-paper/35">
             <span>+{hoveredNode.agree} agree</span>
             <span>{hoveredNode.critical} important</span>
             <span>{hoveredNode.challenge} disagree</span>
