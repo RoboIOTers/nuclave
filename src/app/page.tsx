@@ -45,7 +45,7 @@ export default function HomePage() {
               My Arenas
             </Link>
             <a
-              href="https://github.com/nuclave/nuclave"
+              href="https://github.com/RoboIOTers/nuclave"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 border border-paper/20 text-paper/80 px-6 py-3 font-display font-semibold text-sm tracking-wide hover:border-paper/40 transition-colors"

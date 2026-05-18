@@ -98,6 +98,7 @@ export async function POST(
   const totalSeconds = phaseHistory.reduce((sum, p) => sum + p.timeSpentSeconds, 0);
   const totalOvertime = phaseHistory.reduce((sum, p) => sum + p.overtime, 0);
   const formatMins = (secs: number) => `${Math.floor(secs / 60)}m ${secs % 60}s`;
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
   const phaseTimingSummary = phaseHistory.map((p) => {
     const planned = p.plannedSeconds ? formatMins(p.plannedSeconds) : 'no limit';
@@ -106,12 +107,12 @@ export async function POST(
     return `${p.phase}: ${actual} (planned: ${planned})${over}`;
   });
 
-  const narrative = `This session produced ${contributions.length} contributions from ${participantTokens.size} participants across ${phaseHistory.length} phases in ${formatMins(totalSeconds)} total. ${
+  const narrative = `This session produced ${plural(contributions.length, 'contribution')} from ${plural(participantTokens.size, 'participant')} across ${plural(phaseHistory.length, 'phase')} in ${formatMins(totalSeconds)} total. ${
     totalOvertime > 0 ? `The session ran ${formatMins(totalOvertime)} over planned time. ` : ''
   }${
-    agreed.length > 0 ? `The group reached consensus on ${agreed.length} items.` : 'No clear consensus emerged.'
-  } ${blockers.length > 0 ? `${blockers.length} blockers were identified.` : ''} ${
-    questions.length > 0 ? `${questions.length} questions remain open.` : ''
+    agreed.length > 0 ? `The group reached consensus on ${plural(agreed.length, 'item')}.` : 'No clear consensus emerged.'
+  } ${blockers.length > 0 ? `${plural(blockers.length, 'blocker')} ${blockers.length === 1 ? 'was' : 'were'} identified.` : ''} ${
+    questions.length > 0 ? `${plural(questions.length, 'question')} ${questions.length === 1 ? 'remains' : 'remain'} open.` : ''
   }`;
 
   // Save decision record
