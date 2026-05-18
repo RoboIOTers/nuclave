@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getArena, getContributions, getSignalCounts } from '@/lib/store';
+import { getCurrentUser } from '@/lib/auth';
 import { normalizePhaseHistory } from '@/lib/phase-history';
 import postgres from 'postgres';
 
@@ -23,9 +24,14 @@ export async function POST(
   }
 
   // Closing an arena is destructive (generates the decision record and ends
-  // the session) — restrict it to the facilitator who created the arena.
+  // the session) — restrict it to the facilitator: the creator's browser
+  // token, or the signed-in account the arena is linked to.
   const body = (await request.json().catch(() => ({}))) as { creatorToken?: string };
-  if (body.creatorToken !== arena.creatorToken) {
+  const sessionUser = await getCurrentUser();
+  const isFacilitator =
+    body.creatorToken === arena.creatorToken ||
+    (!!sessionUser && !!arena.userId && sessionUser.id === arena.userId);
+  if (!isFacilitator) {
     return NextResponse.json(
       { success: false, error: 'Only the arena facilitator can close this arena.' },
       { status: 403 }

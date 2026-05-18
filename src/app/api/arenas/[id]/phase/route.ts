@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getArena } from '@/lib/store';
+import { getCurrentUser } from '@/lib/auth';
 import { normalizePhaseHistory } from '@/lib/phase-history';
 import type { ArenaPhase } from '@/types/arena';
 import { ARENA_PHASES } from '@/types/arena';
@@ -38,8 +39,13 @@ export async function POST(
       );
     }
 
-    // Only the arena facilitator (its creator) may change the phase.
-    if (creatorToken !== arena.creatorToken) {
+    // Only the arena facilitator may change the phase — the creator's browser
+    // token, or the signed-in account the arena is linked to.
+    const sessionUser = await getCurrentUser();
+    const isFacilitator =
+      creatorToken === arena.creatorToken ||
+      (!!sessionUser && !!arena.userId && sessionUser.id === arena.userId);
+    if (!isFacilitator) {
       return NextResponse.json(
         { success: false, error: 'Only the arena facilitator can change the phase.' },
         { status: 403 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createArena, getAllArenas, getArenasByCreator, type StoredArena } from '@/lib/store';
+import { getCurrentUser } from '@/lib/auth';
 import type { ArenaType, ArenaMode } from '@/types/arena';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getUserTier, getActiveArenaCount } from '@/lib/tier';
@@ -52,6 +53,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Link the arena to the signed-in account (if any) so it follows the
+    // user across devices; guests fall back to creator_token only.
+    const currentUser = await getCurrentUser();
+
     const arena: StoredArena = {
       id: crypto.randomUUID(),
       title: title.trim(),
@@ -65,6 +70,7 @@ export async function POST(request: NextRequest) {
       contextDocument: contextDocument?.trim() || null,
       maxContributors: Math.min(Math.max(maxContributors || 10, 2), 500),
       creatorToken: creatorToken || 'anonymous',
+      userId: currentUser?.id ?? null,
       template: template || null,
       phaseDurations: phaseDurations || null,
       phaseStartedAt: new Date().toISOString(),

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getArena, getContributions, getSignalCounts } from '@/lib/store';
+import { getCurrentUser } from '@/lib/auth';
 import postgres from 'postgres';
 
 function getSql() {
@@ -36,8 +37,11 @@ export async function GET(
   // authorizes phase/close actions, so it must never be sent to clients —
   // expose only the derived boolean.
   const token = request.nextUrl.searchParams.get('token');
-  const isFacilitator = !!token && token === arena.creatorToken;
-  const { creatorToken: _creatorToken, ...arenaPublic } = arena;
+  const user = await getCurrentUser();
+  const isFacilitator =
+    (!!token && token === arena.creatorToken) ||
+    (!!user && !!arena.userId && user.id === arena.userId);
+  const { creatorToken: _creatorToken, userId: _userId, ...arenaPublic } = arena;
 
   // Load participants for role-based weighting
   const sql = getSql();

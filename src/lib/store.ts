@@ -22,6 +22,7 @@ export interface StoredArena {
   contextDocument: string | null;
   maxContributors: number;
   creatorToken: string;
+  userId: string | null;
   template: string | null;
   phaseDurations: Record<string, number> | null;
   phaseStartedAt: string | null;
@@ -71,8 +72,8 @@ function getSql() {
 export async function createArena(arena: StoredArena): Promise<StoredArena> {
   const sql = getSql();
   await sql`
-    INSERT INTO arenas (id, title, description, type, mode, phase, status, is_anonymous, join_code, context_document, max_contributors, creator_token, phase_durations, phase_started_at, phase_duration_minutes, ai_enabled, created_at)
-    VALUES (${arena.id}, ${arena.title}, ${arena.description}, ${arena.type}, ${arena.mode}, ${arena.phase}, ${arena.status}, ${arena.isAnonymous}, ${arena.joinCode}, ${arena.contextDocument}, ${arena.maxContributors}, ${arena.creatorToken}, ${arena.phaseDurations ? sql.json(arena.phaseDurations) : null}, ${arena.phaseStartedAt}, ${arena.phaseDurationMinutes}, ${arena.aiEnabled}, ${arena.createdAt})
+    INSERT INTO arenas (id, title, description, type, mode, phase, status, is_anonymous, join_code, context_document, max_contributors, creator_token, user_id, phase_durations, phase_started_at, phase_duration_minutes, ai_enabled, created_at)
+    VALUES (${arena.id}, ${arena.title}, ${arena.description}, ${arena.type}, ${arena.mode}, ${arena.phase}, ${arena.status}, ${arena.isAnonymous}, ${arena.joinCode}, ${arena.contextDocument}, ${arena.maxContributors}, ${arena.creatorToken}, ${arena.userId}, ${arena.phaseDurations ? sql.json(arena.phaseDurations) : null}, ${arena.phaseStartedAt}, ${arena.phaseDurationMinutes}, ${arena.aiEnabled}, ${arena.createdAt})
   `;
   return arena;
 }
@@ -103,17 +104,38 @@ export async function getArenasByCreator(creatorToken: string): Promise<StoredAr
   return rows.map(mapArenaRow);
 }
 
-export async function getArenasForParticipant(userToken: string): Promise<StoredArena[]> {
+export async function getArenasForParticipant(
+  userToken: string,
+  userId: string | null = null
+): Promise<StoredArena[]> {
   const sql = getSql();
   const rows = await sql`
     SELECT DISTINCT a.* FROM arenas a
     LEFT JOIN contributions c ON c.arena_id = a.id AND c.author_token = ${userToken}
     LEFT JOIN participants p ON p.arena_id = a.id AND p.user_token = ${userToken}
-    WHERE a.creator_token = ${userToken} OR c.id IS NOT NULL OR p.id IS NOT NULL
+    WHERE a.creator_token = ${userToken}
+       OR (${userId}::uuid IS NOT NULL AND a.user_id = ${userId}::uuid)
+       OR c.id IS NOT NULL
+       OR p.id IS NOT NULL
     ORDER BY a.created_at DESC
     LIMIT 50
   `;
   return rows.map(mapArenaRow);
+}
+
+/**
+ * Attach guest-created arenas (matched by the browser's localStorage token)
+ * to an authenticated account, so they follow the user across devices.
+ */
+export async function claimArenasForUser(
+  creatorToken: string,
+  userId: string
+): Promise<void> {
+  const sql = getSql();
+  await sql`
+    UPDATE arenas SET user_id = ${userId}
+    WHERE creator_token = ${creatorToken} AND user_id IS NULL
+  `;
 }
 
 export async function getContributionCount(arenaId: string): Promise<number> {
@@ -143,6 +165,7 @@ function mapArenaRow(row: Record<string, unknown>): StoredArena {
     contextDocument: row.context_document as string | null,
     maxContributors: row.max_contributors as number,
     creatorToken: (row.creator_token as string) ?? 'anonymous',
+    userId: (row.user_id as string) ?? null,
     template: (row.template as string) ?? null,
     phaseDurations: parseJsonObject<Record<string, number>>(row.phase_durations),
     phaseStartedAt: row.phase_started_at ? (row.phase_started_at as Date).toISOString() : null,

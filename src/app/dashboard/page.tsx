@@ -146,7 +146,14 @@ export default function DashboardPage() {
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Stats bar */}
         <div className="flex items-center gap-6 mb-6">
-          <h1 className="font-display text-xl font-bold">Your Arenas</h1>
+          <div>
+            <h1 className="font-display text-xl font-bold">Your Arenas</h1>
+            {user && (
+              <p className="text-[11px] text-dim mt-0.5">
+                Synced to your account — visible on any device you sign in from.
+              </p>
+            )}
+          </div>
           <div className="flex gap-1 ml-auto">
             {STATUS_FILTERS.map((s) => (
               <button
