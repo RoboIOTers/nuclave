@@ -5,6 +5,7 @@ import type { ContributionType } from '@/types/arena';
 import { CONTRIBUTION_TYPES } from '@/types/arena';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getUserTier, getArenaContributorCount } from '@/lib/tier';
+import { getCurrentUser } from '@/lib/auth';
 
 export async function POST(
   request: NextRequest,
@@ -85,7 +86,10 @@ export async function POST(
       createdAt: new Date().toISOString(),
     };
 
-    await addContribution(contribution);
+    // Link the contribution to the signed-in account (server-side only) so
+    // arenas the user contributed to also follow their account.
+    const currentUser = await getCurrentUser();
+    await addContribution(contribution, currentUser?.id ?? null);
 
     // Check for similar contributions (non-blocking)
     let duplicates: Array<{ id: string; content: string; similarity: number }> = [];

@@ -111,8 +111,10 @@ export async function getArenasForParticipant(
   const sql = getSql();
   const rows = await sql`
     SELECT DISTINCT a.* FROM arenas a
-    LEFT JOIN contributions c ON c.arena_id = a.id AND c.author_token = ${userToken}
-    LEFT JOIN participants p ON p.arena_id = a.id AND p.user_token = ${userToken}
+    LEFT JOIN contributions c ON c.arena_id = a.id
+      AND (c.author_token = ${userToken} OR (${userId}::uuid IS NOT NULL AND c.user_id = ${userId}::uuid))
+    LEFT JOIN participants p ON p.arena_id = a.id
+      AND (p.user_token = ${userToken} OR (${userId}::uuid IS NOT NULL AND p.user_id = ${userId}::uuid))
     WHERE a.creator_token = ${userToken}
        OR (${userId}::uuid IS NOT NULL AND a.user_id = ${userId}::uuid)
        OR c.id IS NOT NULL
@@ -124,18 +126,18 @@ export async function getArenasForParticipant(
 }
 
 /**
- * Attach guest-created arenas (matched by the browser's localStorage token)
- * to an authenticated account, so they follow the user across devices.
+ * Attach all activity from a browser's localStorage token — arenas created,
+ * contributions made, and arenas joined — to an authenticated account, so it
+ * follows the user across devices.
  */
-export async function claimArenasForUser(
-  creatorToken: string,
+export async function claimGuestActivity(
+  browserToken: string,
   userId: string
 ): Promise<void> {
   const sql = getSql();
-  await sql`
-    UPDATE arenas SET user_id = ${userId}
-    WHERE creator_token = ${creatorToken} AND user_id IS NULL
-  `;
+  await sql`UPDATE arenas SET user_id = ${userId} WHERE creator_token = ${browserToken} AND user_id IS NULL`;
+  await sql`UPDATE contributions SET user_id = ${userId} WHERE author_token = ${browserToken} AND user_id IS NULL`;
+  await sql`UPDATE participants SET user_id = ${userId} WHERE user_token = ${browserToken} AND user_id IS NULL`;
 }
 
 export async function getContributionCount(arenaId: string): Promise<number> {
@@ -177,11 +179,16 @@ function mapArenaRow(row: Record<string, unknown>): StoredArena {
 
 // ── Contribution operations ──
 
-export async function addContribution(contribution: StoredContribution): Promise<StoredContribution> {
+export async function addContribution(
+  contribution: StoredContribution,
+  userId: string | null = null
+): Promise<StoredContribution> {
   const sql = getSql();
+  // user_id is server-side only — it is never mapped back onto
+  // StoredContribution, so it never reaches clients (preserves anonymity).
   await sql`
-    INSERT INTO contributions (id, arena_id, type, content, author_token, is_skeptic_ai, is_pinned, is_hidden, cluster_id, created_at)
-    VALUES (${contribution.id}, ${contribution.arenaId}, ${contribution.type}, ${contribution.content}, ${contribution.authorToken}, ${contribution.isSkepticAi}, ${contribution.isPinned}, ${contribution.isHidden}, ${contribution.clusterId}, ${contribution.createdAt})
+    INSERT INTO contributions (id, arena_id, type, content, author_token, user_id, is_skeptic_ai, is_pinned, is_hidden, cluster_id, created_at)
+    VALUES (${contribution.id}, ${contribution.arenaId}, ${contribution.type}, ${contribution.content}, ${contribution.authorToken}, ${userId}, ${contribution.isSkepticAi}, ${contribution.isPinned}, ${contribution.isHidden}, ${contribution.clusterId}, ${contribution.createdAt})
   `;
   return contribution;
 }

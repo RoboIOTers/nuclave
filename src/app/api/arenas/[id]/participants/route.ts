@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import postgres from 'postgres';
+import { getCurrentUser } from '@/lib/auth';
 
 function getSql() {
   const g = globalThis as unknown as { __nuclave_sql?: ReturnType<typeof postgres> };
@@ -27,12 +28,16 @@ export async function POST(
     const validRoles = ['facilitator', 'expert', 'contributor', 'observer'];
     const safeRole = validRoles.includes(role) ? role : 'contributor';
 
+    // user_id links the join to a signed-in account (server-side only).
+    const user = await getCurrentUser();
+
     const rows = await sql`
-      INSERT INTO participants (arena_id, user_token, display_name, role)
-      VALUES (${arenaId}, ${userToken}, ${displayName ?? null}, ${safeRole})
+      INSERT INTO participants (arena_id, user_token, display_name, role, user_id)
+      VALUES (${arenaId}, ${userToken}, ${displayName ?? null}, ${safeRole}, ${user?.id ?? null})
       ON CONFLICT (arena_id, user_token) DO UPDATE SET
         role = ${safeRole},
-        display_name = COALESCE(${displayName ?? null}, participants.display_name)
+        display_name = COALESCE(${displayName ?? null}, participants.display_name),
+        user_id = COALESCE(participants.user_id, EXCLUDED.user_id)
       RETURNING *
     `;
 
