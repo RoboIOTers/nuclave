@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getArena } from '@/lib/store';
+import { normalizePhaseHistory } from '@/lib/phase-history';
 import type { ArenaPhase } from '@/types/arena';
 import { ARENA_PHASES } from '@/types/arena';
 import postgres from 'postgres';
@@ -68,11 +69,10 @@ export async function POST(
 
     const sql = getSql();
 
-    // Check if this phase was already visited — restore its timer if so
+    // Check if this phase was already visited — restore its timer if so.
+    // Normalized to tolerate legacy double-encoded phase_history rows.
     const arenaRow = await sql`SELECT phase_history FROM arenas WHERE id = ${id}`;
-    const history = (arenaRow[0]?.phase_history ?? []) as Array<{
-      phase: string; startedAt: string; endedAt: string; timeSpentSeconds: number; plannedSeconds: number | null;
-    }>;
+    const history = normalizePhaseHistory(arenaRow[0]?.phase_history);
     const previousVisit = history.findLast((h) => h.phase === phase);
 
     // Record time spent in the current phase before switching
@@ -92,7 +92,7 @@ export async function POST(
 
       await sql`
         UPDATE arenas SET
-          phase_history = COALESCE(phase_history, '[]'::jsonb) || ${JSON.stringify([historyEntry])}::jsonb
+          phase_history = COALESCE(phase_history, '[]'::jsonb) || ${sql.json([historyEntry])}::jsonb
         WHERE id = ${id}
       `;
     }

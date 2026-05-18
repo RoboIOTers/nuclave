@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getArena, getContributions, getSignalCounts } from '@/lib/store';
+import { normalizePhaseHistory } from '@/lib/phase-history';
 import postgres from 'postgres';
 
 function getSql() {
@@ -10,6 +11,20 @@ function getSql() {
   return g.__nuclave_sql;
 }
 
+function errorPage(message: string, status: number): NextResponse {
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Nuclave — Export</title></head>
+<body style="font-family:system-ui,sans-serif;max-width:520px;margin:80px auto;padding:0 24px;color:#1a1a1a">
+  <h1 style="font-size:20px">Couldn't generate the decision document</h1>
+  <p style="color:#555;line-height:1.6">${escapeHtml(message)}</p>
+  <p style="color:#888;font-size:13px">Your arena and its data are safe — only this export failed. Try again, or use the Markdown / JSON export instead.</p>
+</body></html>`;
+  return new NextResponse(html, {
+    status,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  });
+}
+
 /**
  * Returns a styled HTML page designed for browser Print → PDF.
  * Clean, branded, professional decision document.
@@ -18,68 +33,67 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const arena = await getArena(id);
+  try {
+    const { id } = await params;
+    const arena = await getArena(id);
 
-  if (!arena) {
-    return new NextResponse('Arena not found', { status: 404 });
-  }
+    if (!arena) {
+      return errorPage('This arena does not exist or the link is invalid.', 404);
+    }
 
-  const rawContribs = await getContributions(id);
-  const contributions = await Promise.all(
-    rawContribs.map(async (c) => ({
-      ...c,
-      signals: await getSignalCounts(c.id),
-    }))
-  );
+    const rawContribs = await getContributions(id);
+    const contributions = await Promise.all(
+      rawContribs.map(async (c) => ({
+        ...c,
+        signals: await getSignalCounts(c.id),
+      }))
+    );
 
-  // Group by type
-  const byType: Record<string, typeof contributions> = {};
-  for (const c of contributions) {
-    if (!byType[c.type]) byType[c.type] = [];
-    byType[c.type].push(c);
-  }
+    // Group by type
+    const byType: Record<string, typeof contributions> = {};
+    for (const c of contributions) {
+      if (!byType[c.type]) byType[c.type] = [];
+      byType[c.type].push(c);
+    }
 
-  const typeLabels: Record<string, { label: string; emoji: string; color: string }> = {
-    benefit: { label: 'Benefits', emoji: '✓', color: '#16a34a' },
-    risk: { label: 'Risks', emoji: '⚠', color: '#dc2626' },
-    feature: { label: 'Ideas & Features', emoji: '💡', color: '#eab308' },
-    blocker: { label: 'Blockers', emoji: '🛑', color: '#b91c1c' },
-    checklist: { label: 'Checklist', emoji: '☑', color: '#2563eb' },
-    question: { label: 'Open Questions', emoji: '?', color: '#7c3aed' },
-    decision: { label: 'Decision Points', emoji: '⚑', color: '#0d9488' },
-    wildcard: { label: 'Wild Cards', emoji: '✦', color: '#d946ef' },
-  };
+    const typeLabels: Record<string, { label: string; emoji: string; color: string }> = {
+      benefit: { label: 'Benefits', emoji: '✓', color: '#16a34a' },
+      risk: { label: 'Risks', emoji: '⚠', color: '#dc2626' },
+      feature: { label: 'Ideas & Features', emoji: '💡', color: '#eab308' },
+      blocker: { label: 'Blockers', emoji: '🛑', color: '#b91c1c' },
+      checklist: { label: 'Checklist', emoji: '☑', color: '#2563eb' },
+      question: { label: 'Open Questions', emoji: '?', color: '#7c3aed' },
+      decision: { label: 'Decision Points', emoji: '⚑', color: '#0d9488' },
+      wildcard: { label: 'Wild Cards', emoji: '✦', color: '#d946ef' },
+    };
 
-  // Fetch phase timing
-  const sql = getSql();
-  const arenaRows = await sql`SELECT phase_history FROM arenas WHERE id = ${id}`;
-  const phaseHistory = (arenaRows[0]?.phase_history as Array<{
-    phase: string; timeSpentSeconds: number; plannedSeconds: number | null; overtime: number;
-  }>) ?? [];
+    // Fetch phase timing (normalized to tolerate legacy double-encoded rows)
+    const sql = getSql();
+    const arenaRows = await sql`SELECT phase_history FROM arenas WHERE id = ${id}`;
+    const phaseHistory = normalizePhaseHistory(arenaRows[0]?.phase_history);
 
-  const formatMins = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m}m ${s}s`;
-  };
+    const formatMins = (secs: number) => {
+      const m = Math.floor(secs / 60);
+      const s = secs % 60;
+      return `${m}m ${s}s`;
+    };
 
-  const totalSessionTime = phaseHistory.reduce((sum, p) => sum + p.timeSpentSeconds, 0);
+    const totalSessionTime = phaseHistory.reduce((sum, p) => sum + p.timeSpentSeconds, 0);
 
-  // Build summary stats
-  const totalAgree = contributions.reduce((sum, c) => sum + c.signals.agree, 0);
-  const totalCritical = contributions.reduce((sum, c) => sum + c.signals.critical, 0);
-  const topItems = [...contributions].sort((a, b) => b.signals.agree - a.signals.agree).slice(0, 5);
-  const blockers = contributions.filter((c) => c.type === 'blocker');
-  const questions = contributions.filter((c) => c.type === 'question');
+    // Build summary stats
+    const totalAgree = contributions.reduce((sum, c) => sum + c.signals.agree, 0);
+    const totalCritical = contributions.reduce((sum, c) => sum + c.signals.critical, 0);
+    const topItems = [...contributions].sort((a, b) => b.signals.agree - a.signals.agree).slice(0, 5);
+    const blockers = contributions.filter((c) => c.type === 'blocker');
+    const questions = contributions.filter((c) => c.type === 'question');
 
-  // Build sections HTML
-  let sectionsHtml = '';
-  for (const [type, items] of Object.entries(byType)) {
-    const meta = typeLabels[type] ?? { label: type, emoji: '•', color: '#666' };
-    const sorted = [...items].sort((a, b) => b.signals.agree - a.signals.agree);
+    // Build sections HTML
+    let sectionsHtml = '';
+    for (const [type, items] of Object.entries(byType)) {
+      const meta = typeLabels[type] ?? { label: type, emoji: '•', color: '#666' };
+      const sorted = [...items].sort((a, b) => b.signals.agree - a.signals.agree);
 
-    sectionsHtml += `
+      sectionsHtml += `
       <div class="section">
         <h2 style="color: ${meta.color}; border-bottom: 2px solid ${meta.color}; padding-bottom: 6px;">
           ${meta.emoji} ${meta.label} (${items.length})
@@ -99,9 +113,9 @@ export async function GET(
             .join('')}
         </table>
       </div>`;
-  }
+    }
 
-  const html = `<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -151,8 +165,8 @@ export async function GET(
     <h1>NU<span>CLAVE</span></h1>
     <div class="meta">
       <span>Decision Document</span>
-      <span>Phase: ${arena.phase}</span>
-      <span>Mode: ${arena.mode}</span>
+      <span>Phase: ${escapeHtml(arena.phase)}</span>
+      <span>Mode: ${escapeHtml(arena.mode)}</span>
       <span>${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
     </div>
     <div class="title">${escapeHtml(arena.title)}</div>
@@ -204,15 +218,18 @@ export async function GET(
 </body>
 </html>`;
 
-  return new NextResponse(html, {
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-    },
-  });
+    return new NextResponse(html, {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+      },
+    });
+  } catch {
+    return errorPage('An unexpected error occurred while building the document.', 500);
+  }
 }
 
-function escapeHtml(text: string): string {
-  return text
+function escapeHtml(text: unknown): string {
+  return String(text ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

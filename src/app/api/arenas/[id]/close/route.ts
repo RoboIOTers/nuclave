@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getArena, getContributions, getSignalCounts } from '@/lib/store';
+import { normalizePhaseHistory } from '@/lib/phase-history';
 import postgres from 'postgres';
 
 function getSql() {
@@ -50,19 +51,14 @@ export async function POST(
 
     await sql`
       UPDATE arenas SET
-        phase_history = COALESCE(phase_history, '[]'::jsonb) || ${JSON.stringify([historyEntry])}::jsonb
+        phase_history = COALESCE(phase_history, '[]'::jsonb) || ${sql.json([historyEntry])}::jsonb
       WHERE id = ${id}
     `;
   }
 
-  // Fetch phase history
+  // Fetch phase history (normalized to tolerate legacy double-encoded rows)
   const arenaRows = await sql`SELECT phase_history FROM arenas WHERE id = ${id}`;
-  const phaseHistory = (arenaRows[0]?.phase_history as Array<{
-    phase: string;
-    timeSpentSeconds: number;
-    plannedSeconds: number | null;
-    overtime: number;
-  }>) ?? [];
+  const phaseHistory = normalizePhaseHistory(arenaRows[0]?.phase_history);
 
   const rawContribs = await getContributions(id);
   const contributions = await Promise.all(
