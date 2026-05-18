@@ -117,7 +117,7 @@ export async function POST(
   // Save decision record
   await sql`
     INSERT INTO decisions (arena_id, title, agreed_items, contested_items, unresolved_questions, blockers, next_actions, narrative, contribution_count, participant_count)
-    VALUES (${id}, ${arena.title}, ${JSON.stringify(agreed)}, ${JSON.stringify(contested)}, ${JSON.stringify(questions)}, ${JSON.stringify(blockers)}, ${JSON.stringify(nextActions)}, ${narrative}, ${contributions.length}, ${participantTokens.size})
+    VALUES (${id}, ${arena.title}, ${sql.json(agreed)}, ${sql.json(contested)}, ${sql.json(questions)}, ${sql.json(blockers)}, ${sql.json(nextActions)}, ${narrative}, ${contributions.length}, ${participantTokens.size})
     ON CONFLICT (arena_id) DO UPDATE SET
       agreed_items = EXCLUDED.agreed_items,
       contested_items = EXCLUDED.contested_items,

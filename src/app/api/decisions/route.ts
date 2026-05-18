@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import postgres from 'postgres';
+import { parseJsonArray } from '@/lib/json-column';
 
 function getSql() {
   const g = globalThis as unknown as { __nuclave_sql?: ReturnType<typeof postgres> };
@@ -26,11 +27,11 @@ export async function GET() {
     title: r.title,
     joinCode: r.join_code,
     arenaType: r.arena_type,
-    agreedItems: r.agreed_items,
-    contestedItems: r.contested_items,
-    unresolvedQuestions: r.unresolved_questions,
-    blockers: r.blockers,
-    nextActions: r.next_actions,
+    agreedItems: parseJsonArray<string>(r.agreed_items),
+    contestedItems: parseJsonArray<string>(r.contested_items),
+    unresolvedQuestions: parseJsonArray<string>(r.unresolved_questions),
+    blockers: parseJsonArray<string>(r.blockers),
+    nextActions: parseJsonArray<string>(r.next_actions),
     narrative: r.narrative,
     contributionCount: r.contribution_count,
     participantCount: r.participant_count,

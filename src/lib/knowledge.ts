@@ -1,4 +1,5 @@
 import postgres from 'postgres';
+import { parseJsonArray } from './json-column';
 
 function getSql() {
   const g = globalThis as unknown as { __nuclave_sql?: ReturnType<typeof postgres> };
@@ -48,7 +49,7 @@ export async function storeArenaKnowledge(
   if (embeddingStr) {
     await sql`
       INSERT INTO arena_knowledge (arena_id, title, summary, key_decisions, key_blockers, tags, embedding)
-      VALUES (${arenaId}, ${title}, ${summary}, ${JSON.stringify(keyDecisions)}, ${JSON.stringify(keyBlockers)}, ${JSON.stringify(tags)}, ${embeddingStr}::vector)
+      VALUES (${arenaId}, ${title}, ${summary}, ${sql.json(keyDecisions)}, ${sql.json(keyBlockers)}, ${sql.json(tags)}, ${embeddingStr}::vector)
       ON CONFLICT (arena_id) DO UPDATE SET
         title = EXCLUDED.title, summary = EXCLUDED.summary,
         key_decisions = EXCLUDED.key_decisions, key_blockers = EXCLUDED.key_blockers,
@@ -57,7 +58,7 @@ export async function storeArenaKnowledge(
   } else {
     await sql`
       INSERT INTO arena_knowledge (arena_id, title, summary, key_decisions, key_blockers, tags)
-      VALUES (${arenaId}, ${title}, ${summary}, ${JSON.stringify(keyDecisions)}, ${JSON.stringify(keyBlockers)}, ${JSON.stringify(tags)})
+      VALUES (${arenaId}, ${title}, ${summary}, ${sql.json(keyDecisions)}, ${sql.json(keyBlockers)}, ${sql.json(tags)})
       ON CONFLICT (arena_id) DO UPDATE SET
         title = EXCLUDED.title, summary = EXCLUDED.summary,
         key_decisions = EXCLUDED.key_decisions, key_blockers = EXCLUDED.key_blockers,
@@ -129,9 +130,9 @@ function mapKnowledgeRow(row: Record<string, unknown>): KnowledgeEntry {
     arenaId: row.arena_id as string,
     title: row.title as string,
     summary: row.summary as string | null,
-    keyDecisions: (row.key_decisions ?? []) as string[],
-    keyBlockers: (row.key_blockers ?? []) as string[],
-    tags: (row.tags ?? []) as string[],
+    keyDecisions: parseJsonArray<string>(row.key_decisions),
+    keyBlockers: parseJsonArray<string>(row.key_blockers),
+    tags: parseJsonArray<string>(row.tags),
     createdAt: (row.created_at as Date).toISOString(),
     similarity: row.similarity as number | undefined,
   };

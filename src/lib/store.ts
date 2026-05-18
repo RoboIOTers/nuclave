@@ -5,6 +5,7 @@
 
 import postgres from 'postgres';
 import type { ContributionType, SignalType, ArenaPhase } from '@/types/arena';
+import { parseJsonObject } from './json-column';
 
 // ── Types ──
 
@@ -71,7 +72,7 @@ export async function createArena(arena: StoredArena): Promise<StoredArena> {
   const sql = getSql();
   await sql`
     INSERT INTO arenas (id, title, description, type, mode, phase, status, is_anonymous, join_code, context_document, max_contributors, creator_token, phase_durations, phase_started_at, phase_duration_minutes, ai_enabled, created_at)
-    VALUES (${arena.id}, ${arena.title}, ${arena.description}, ${arena.type}, ${arena.mode}, ${arena.phase}, ${arena.status}, ${arena.isAnonymous}, ${arena.joinCode}, ${arena.contextDocument}, ${arena.maxContributors}, ${arena.creatorToken}, ${arena.phaseDurations ? JSON.stringify(arena.phaseDurations) : null}, ${arena.phaseStartedAt}, ${arena.phaseDurationMinutes}, ${arena.aiEnabled}, ${arena.createdAt})
+    VALUES (${arena.id}, ${arena.title}, ${arena.description}, ${arena.type}, ${arena.mode}, ${arena.phase}, ${arena.status}, ${arena.isAnonymous}, ${arena.joinCode}, ${arena.contextDocument}, ${arena.maxContributors}, ${arena.creatorToken}, ${arena.phaseDurations ? sql.json(arena.phaseDurations) : null}, ${arena.phaseStartedAt}, ${arena.phaseDurationMinutes}, ${arena.aiEnabled}, ${arena.createdAt})
   `;
   return arena;
 }
@@ -143,7 +144,7 @@ function mapArenaRow(row: Record<string, unknown>): StoredArena {
     maxContributors: row.max_contributors as number,
     creatorToken: (row.creator_token as string) ?? 'anonymous',
     template: (row.template as string) ?? null,
-    phaseDurations: (row.phase_durations as Record<string, number>) ?? null,
+    phaseDurations: parseJsonObject<Record<string, number>>(row.phase_durations),
     phaseStartedAt: row.phase_started_at ? (row.phase_started_at as Date).toISOString() : null,
     phaseDurationMinutes: (row.phase_duration_minutes as number) ?? null,
     aiEnabled: (row.ai_enabled as boolean) ?? true,
