@@ -11,6 +11,7 @@ import {
   ArrowRight,
   Loader2,
   LayoutDashboard,
+  LogOut,
 } from 'lucide-react';
 import { getUserToken } from '@/lib/utils/user-token';
 
@@ -28,6 +29,12 @@ interface ArenaItem {
   createdAt: string;
 }
 
+interface AuthUser {
+  email: string | null;
+  name: string | null;
+  avatarUrl: string | null;
+}
+
 const PHASE_COLORS: Record<string, string> = {
   ideation: 'bg-accent-2',
   debate: 'bg-accent-4',
@@ -42,6 +49,16 @@ export default function DashboardPage() {
   const [arenas, setArenas] = useState<ArenaItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
+  const [user, setUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload) => setUser(payload?.data ?? null))
+      .catch(() => {
+        // Not signed in — guest user, no logout control shown
+      });
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -65,6 +82,15 @@ export default function DashboardPage() {
     filter === 'all'
       ? arenas
       : arenas.filter((a) => a.status === filter);
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Ignore — the reload below reflects the cleared session
+    }
+    window.location.reload();
+  };
 
   const timeAgo = (dateStr: string) => {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -91,13 +117,29 @@ export default function DashboardPage() {
               Dashboard
             </div>
           </div>
-          <Link
-            href="/arena/create"
-            className="flex items-center gap-1.5 bg-accent hover:bg-accent/90 text-paper px-4 py-2 text-xs font-semibold transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            New Arena
-          </Link>
+          <div className="flex items-center gap-3">
+            {user && (
+              <>
+                <span className="hidden sm:inline text-paper/60 text-xs">
+                  {user.name ?? user.email}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-1.5 text-paper/50 hover:text-paper text-xs font-mono transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  Log out
+                </button>
+              </>
+            )}
+            <Link
+              href="/arena/create"
+              className="flex items-center gap-1.5 bg-accent hover:bg-accent/90 text-paper px-4 py-2 text-xs font-semibold transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New Arena
+            </Link>
+          </div>
         </div>
       </div>
 

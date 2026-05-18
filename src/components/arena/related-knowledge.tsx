@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Brain, ArrowRight, Loader2 } from 'lucide-react';
+import { Brain, ArrowRight, Loader2, X } from 'lucide-react';
 
 interface KnowledgeEntry {
   id: string;
@@ -58,9 +58,11 @@ export function RelatedKnowledge({ arenaTitle, arenaDescription }: RelatedKnowle
         </div>
         <button
           onClick={() => setDismissed(true)}
-          className="text-[10px] text-dim hover:text-ink"
+          aria-label="Hide Institutional Memory"
+          className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-dim hover:text-ink p-1.5 -m-1.5"
         >
-          dismiss
+          <X className="w-3.5 h-3.5" />
+          Hide
         </button>
       </div>
 

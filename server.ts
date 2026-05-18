@@ -22,6 +22,16 @@ app.prepare().then(() => {
       methods: ['GET', 'POST'],
     },
     path: '/socket.io/',
+    // Detect dropped connections faster than the 25s default — Mobile Safari
+    // suspends backgrounded tabs and silently loses heartbeats.
+    pingInterval: 20000,
+    pingTimeout: 25000,
+    // Restore room membership and replay missed events when a client
+    // reconnects within the window (e.g. after returning to a backgrounded tab).
+    connectionStateRecovery: {
+      maxDisconnectionDuration: 2 * 60 * 1000,
+      skipMiddlewares: true,
+    },
   });
 
   // Store io instance globally so API routes can access it

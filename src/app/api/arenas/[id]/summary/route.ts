@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getArena } from '@/lib/store';
 
 // Summary generator — uses AI engine when available,
 // falls back to simple aggregation
@@ -31,13 +32,20 @@ export async function POST(
       );
     }
 
-    // Try AI-powered summary
-    try {
-      const { generateSummary } = await import('@/lib/ai/engine');
-      const summary = await generateSummary(contributions);
-      return NextResponse.json({ success: true, data: summary, arenaId });
-    } catch {
-      // Fall back to simple aggregation if AI is not configured
+    // Respect the per-arena AI toggle: when AI is off, skip the LLM call
+    // entirely and use on-server aggregation only — no data leaves the host.
+    const arena = await getArena(arenaId);
+    const aiAllowed = arena?.aiEnabled !== false;
+
+    // Try AI-powered summary (only when AI is enabled for this arena)
+    if (aiAllowed) {
+      try {
+        const { generateSummary } = await import('@/lib/ai/engine');
+        const summary = await generateSummary(contributions);
+        return NextResponse.json({ success: true, data: summary, arenaId });
+      } catch {
+        // Fall back to simple aggregation if AI is not configured
+      }
     }
 
     // Fallback: simple aggregation without AI

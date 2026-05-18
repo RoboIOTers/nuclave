@@ -114,7 +114,7 @@ export function ContributionCard({
       const res = await fetch('/api/ai/improve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: editText }),
+        body: JSON.stringify({ content: editText, aiEnabled }),
       });
       if (res.ok) {
         const data = await res.json();

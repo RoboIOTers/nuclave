@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 import type { ContributionType } from '@/types/arena';
 
@@ -16,6 +16,16 @@ export function ContributionInput({ onSubmit, disabled, arenaDescription, aiEnab
   const [isClassifying, setIsClassifying] = useState(false);
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-grow the textarea. CSS `field-sizing` handles this in Chromium, but
+  // Firefox and older Safari need a JS fallback so multi-line input stays
+  // visible instead of being hidden behind a single-line scroll.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, [content]);
 
   const handleSubmit = async () => {
     const trimmed = content.trim();
@@ -66,8 +76,7 @@ export function ContributionInput({ onSubmit, disabled, arenaDescription, aiEnab
           disabled={disabled || isClassifying}
           placeholder={arenaDescription ? "Share your thoughts..." : "What's on your mind?"}
           rows={1}
-          className="flex-1 bg-transparent text-sm leading-relaxed focus:outline-none resize-none placeholder:text-dim/50 min-h-[36px] max-h-[120px] py-1.5"
-          style={{ fieldSizing: 'content' } as React.CSSProperties}
+          className="flex-1 bg-transparent text-sm leading-relaxed focus:outline-none resize-none placeholder:text-dim/50 min-h-[36px] max-h-[120px] py-1.5 overflow-y-auto"
         />
         <button
           type="button"

@@ -9,6 +9,7 @@ import {
   Users,
   ArrowRight,
   Code2,
+  LayoutDashboard,
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -35,6 +36,13 @@ export default function HomePage() {
             >
               Create an Arena
               <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 border border-paper/20 text-paper/80 px-6 py-3 font-display font-semibold text-sm tracking-wide hover:border-paper/40 transition-colors"
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              My Arenas
             </Link>
             <a
               href="https://github.com/nuclave/nuclave"
@@ -166,6 +174,13 @@ export default function HomePage() {
             >
               <Users className="w-4 h-4" />
               Create an Arena
+            </Link>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 border border-paper/20 text-paper/80 px-8 py-3.5 font-display font-semibold text-sm tracking-wide hover:border-paper/40 transition-colors"
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              My Arenas
             </Link>
           </div>
         </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -35,6 +35,7 @@ const TEMPLATE_ICONS: Record<string, typeof Lightbulb> = {
 export default function CreateArenaPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<ArenaTemplate | null>(null);
   const [formData, setFormData] = useState({
@@ -46,6 +47,23 @@ export default function CreateArenaPage() {
     maxContributors: 10,
     contextDocument: '',
   });
+
+  // The configured AI provider, fetched from the server so the privacy
+  // choice can name it accurately (it could be Claude, OpenAI, or Ollama).
+  const [aiProviderLabel, setAiProviderLabel] = useState('your AI provider');
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload) => {
+        if (payload?.data?.aiProviderLabel) {
+          setAiProviderLabel(payload.data.aiProviderLabel);
+        }
+      })
+      .catch(() => {
+        // Non-critical — keep the generic label
+      });
+  }, []);
 
   const updateField = <K extends keyof typeof formData>(
     key: K,
@@ -66,6 +84,7 @@ export default function CreateArenaPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setSubmitError(null);
 
     try {
       const response = await fetch('/api/arenas', {
@@ -81,11 +100,22 @@ export default function CreateArenaPage() {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to create arena');
+      const payload = await response.json().catch(() => null);
 
-      const data = await response.json();
-      router.push(`/arena/${data.data.id}`);
-    } catch {
+      if (!response.ok || !payload?.success || !payload?.data?.id) {
+        const message =
+          payload?.error ||
+          `Failed to create arena (HTTP ${response.status}). Please try again.`;
+        throw new Error(message);
+      }
+
+      router.push(`/arena/${payload.data.id}`);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Could not reach server. Check your connection and try again.';
+      setSubmitError(message);
       setIsSubmitting(false);
     }
   };
@@ -171,6 +201,62 @@ export default function CreateArenaPage() {
             />
           </div>
 
+          {/* Data privacy — first-class choice, not buried in advanced options */}
+          <div>
+            <label className="block font-mono text-[10px] tracking-wider uppercase text-dim mb-1.5">
+              Data privacy
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => updateField('aiEnabled', true)}
+                aria-pressed={formData.aiEnabled}
+                className={`border p-3 text-left transition-colors ${
+                  formData.aiEnabled
+                    ? 'border-accent-2 bg-accent-2/5'
+                    : 'border-border bg-card hover:border-dim'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 mb-1">
+                  <Zap className={`w-3.5 h-3.5 ${formData.aiEnabled ? 'text-accent-2' : 'text-dim'}`} />
+                  <span className="font-display text-xs font-semibold">AI assist</span>
+                </span>
+                <span className="block text-[10px] text-dim leading-tight">
+                  Contributions are sent to {aiProviderLabel} for classification,
+                  summaries, and the Skeptic AI.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => updateField('aiEnabled', false)}
+                aria-pressed={!formData.aiEnabled}
+                className={`border p-3 text-left transition-colors ${
+                  !formData.aiEnabled
+                    ? 'border-accent bg-accent/5'
+                    : 'border-border bg-card hover:border-dim'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 mb-1">
+                  <EyeOff className={`w-3.5 h-3.5 ${!formData.aiEnabled ? 'text-accent' : 'text-dim'}`} />
+                  <span className="font-display text-xs font-semibold">Fully private</span>
+                </span>
+                <span className="block text-[10px] text-dim leading-tight">
+                  Local keyword classifier only. No data leaves this server —
+                  zero external API calls.
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {submitError && (
+            <div
+              role="alert"
+              className="border border-accent bg-accent/5 text-accent px-4 py-3 text-xs"
+            >
+              {submitError}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={isSubmitting || !formData.title.trim()}
@@ -227,29 +313,6 @@ export default function CreateArenaPage() {
                   </button>
                 </div>
               </div>
-              {/* AI toggle */}
-              <div>
-                <label className="block font-mono text-[10px] tracking-wider uppercase text-dim mb-1.5">AI Features</label>
-                <button
-                  type="button"
-                  onClick={() => updateField('aiEnabled', !formData.aiEnabled)}
-                  className={`w-full flex items-center justify-center gap-1.5 border py-2 text-xs font-medium transition-colors ${
-                    formData.aiEnabled ? 'border-accent-2 bg-accent-2/5 text-accent-2' : 'border-accent bg-accent/5 text-accent'
-                  }`}
-                >
-                  {formData.aiEnabled ? (
-                    <><Zap className="w-3.5 h-3.5" /> AI On — data sent to OpenAI</>
-                  ) : (
-                    <><EyeOff className="w-3.5 h-3.5" /> AI Off — fully private</>
-                  )}
-                </button>
-                <p className="text-[9px] text-dim mt-1">
-                  {formData.aiEnabled
-                    ? 'Contributions are sent to OpenAI for classification, summaries, and suggestions.'
-                    : 'All processing stays on this server. No data leaves your infrastructure.'}
-                </p>
-              </div>
-
               <div>
                 <label className="block font-mono text-[10px] tracking-wider uppercase text-dim mb-1.5">Max contributors</label>
                 <div className="flex items-center gap-2 border border-border px-3 py-2">

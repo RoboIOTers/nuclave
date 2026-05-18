@@ -11,7 +11,7 @@ import { MobileSummaryToggle } from '@/components/arena/mobile-summary-toggle';
 import { ClusterView } from '@/components/arena/cluster-view';
 import { IdeasMap } from '@/components/arena/ideas-map';
 import { RelatedKnowledge } from '@/components/arena/related-knowledge';
-import { Filter, Loader2, RefreshCw, LayoutList, LayoutGrid, Waypoints } from 'lucide-react';
+import { Filter, Loader2, RefreshCw, LayoutList, LayoutGrid, Waypoints, AlertTriangle, X } from 'lucide-react';
 import type { ContributionType, SignalType, ArenaPhase, ArenaMode } from '@/types/arena';
 import { CONTRIBUTION_TYPES } from '@/types/arena';
 import { getUserToken } from '@/lib/utils/user-token';
@@ -43,6 +43,7 @@ interface ArenaData {
   phaseStartedAt?: string | null;
   phaseDurationMinutes?: number | null;
   aiEnabled?: boolean;
+  isFacilitator?: boolean;
 }
 
 interface Summary {
@@ -72,10 +73,21 @@ export default function ArenaPage() {
   const feedRef = useRef<HTMLDivElement>(null);
   const userToken = typeof window !== 'undefined' ? getUserToken() : 'server';
 
+  // Transient error toast for actions that would otherwise fail silently.
+  const [actionError, setActionError] = useState<string | null>(null);
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showError = useCallback((message: string) => {
+    setActionError(message);
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = setTimeout(() => setActionError(null), 5000);
+  }, []);
+
   // ── Fetch arena data from API ──
   const fetchArena = useCallback(async () => {
     try {
-      const response = await fetch(`/api/arenas/${arenaId}`);
+      const response = await fetch(
+        `/api/arenas/${arenaId}?token=${encodeURIComponent(userToken)}`
+      );
       if (response.status === 404) {
         setNotFound(true);
         setIsLoading(false);
@@ -95,7 +107,7 @@ export default function ArenaPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [arenaId]);
+  }, [arenaId, userToken]);
 
   // Initial fetch
   useEffect(() => {
@@ -116,8 +128,26 @@ export default function ArenaPage() {
         prev.map((c) => (c.id === data.contributionId ? { ...c, signals: data.signals } : c))
       );
     }, []),
-    onPhaseChanged: useCallback((phase: string) => {
-      setArena((prev) => (prev ? { ...prev, phase: phase as ArenaPhase } : prev));
+    onPhaseChanged: useCallback((data: {
+      phase: string;
+      phaseStartedAt?: string | null;
+      phaseDurationMinutes?: number | null;
+    }) => {
+      setArena((prev) =>
+        prev
+          ? {
+              ...prev,
+              phase: data.phase as ArenaPhase,
+              // Keep the existing timer if a legacy string-only event arrives.
+              phaseStartedAt:
+                data.phaseStartedAt !== undefined ? data.phaseStartedAt : prev.phaseStartedAt,
+              phaseDurationMinutes:
+                data.phaseDurationMinutes !== undefined
+                  ? data.phaseDurationMinutes
+                  : prev.phaseDurationMinutes,
+            }
+          : prev
+      );
     }, []),
     onParticipantCount: useCallback((count: number) => {
       setParticipantCount(count);
@@ -151,8 +181,26 @@ export default function ArenaPage() {
 
         if (response.ok) {
           const data = await response.json();
-          setContributions((prev) => [data.data, ...prev]);
-          emitContribution(data.data);
+          const newContribution = data.data as Contribution;
+          // Surface near-duplicates the server detected: badge the new card
+          // and each matched card with how many similar points now exist.
+          const dups = (data.data.duplicates ?? []) as Array<{ id: string }>;
+          const dupIds = new Set(dups.map((d) => d.id));
+          setContributions((prev) => {
+            const updated =
+              dups.length > 0
+                ? prev.map((c) =>
+                    dupIds.has(c.id) ? { ...c, clusterCount: (c.clusterCount ?? 1) + 1 } : c
+                  )
+                : prev;
+            return [
+              dups.length > 0
+                ? { ...newContribution, clusterCount: dups.length + 1 }
+                : newContribution,
+              ...updated,
+            ];
+          });
+          emitContribution(newContribution);
           feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
           setRateLimitError(null);
         } else if (response.status === 403) {
@@ -164,12 +212,34 @@ export default function ArenaPage() {
           setTimeout(() => setRateLimitError(null), 5000);
         }
       } catch {
-        // Network error
+        showError('Could not submit your contribution — check your connection.');
       } finally {
         setIsSubmitting(false);
       }
     },
-    [arenaId, userToken]
+    [arenaId, userToken, showError]
+  );
+
+  // ── Submit a starter prompt — classify it first instead of forcing 'feature' ──
+  const handleStarterPrompt = useCallback(
+    async (prompt: string) => {
+      let type: ContributionType = 'feature';
+      try {
+        const res = await fetch('/api/ai/classify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: prompt, aiEnabled: arena?.aiEnabled !== false }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          type = (data.data?.type as ContributionType) ?? 'feature';
+        }
+      } catch {
+        // Fall back to 'feature' if classification is unavailable
+      }
+      handleContribution(type, prompt);
+    },
+    [arena?.aiEnabled, handleContribution]
   );
 
   // ── Toggle signal via API ──
@@ -219,9 +289,10 @@ export default function ArenaPage() {
           delete updated[contributionId];
           return updated;
         });
+        showError('Could not register your signal. Please try again.');
       }
     },
-    [arenaId, userToken]
+    [arenaId, userToken, showError]
   );
 
   // ── Change contribution type via API ──
@@ -241,9 +312,10 @@ export default function ArenaPage() {
       } catch {
         // Revert on failure — refetch
         fetchArena();
+        showError('Could not change the type. Reverting.');
       }
     },
-    [arenaId, fetchArena]
+    [arenaId, fetchArena, showError]
   );
 
   // ── Change contribution content via API ──
@@ -261,9 +333,10 @@ export default function ArenaPage() {
         });
       } catch {
         fetchArena();
+        showError('Could not save your edit. Reverting.');
       }
     },
-    [arenaId, fetchArena]
+    [arenaId, fetchArena, showError]
   );
 
   // ── Request summary ──
@@ -362,13 +435,22 @@ export default function ArenaPage() {
         participantCount={participantCount}
         onClose={async () => {
           try {
-            const res = await fetch(`/api/arenas/${arenaId}/close`, { method: 'POST' });
+            const res = await fetch(`/api/arenas/${arenaId}/close`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ creatorToken: userToken }),
+            });
             if (res.ok) {
               setArena((prev) => prev ? { ...prev, phase: 'decision' as ArenaPhase, status: 'closed' } : prev);
               // Redirect to decision document
               window.open(`/api/arenas/${arenaId}/export/pdf`, '_blank');
+            } else {
+              const err = await res.json().catch(() => null);
+              showError(err?.error ?? 'Could not close the arena.');
             }
-          } catch { /* silent */ }
+          } catch {
+            showError('Could not close the arena — check your connection.');
+          }
         }}
       />
 
@@ -378,13 +460,13 @@ export default function ArenaPage() {
           currentPhase={arena.phase}
           phaseStartedAt={arena.phaseStartedAt ?? null}
           phaseDurationMinutes={arena.phaseDurationMinutes ?? null}
-          isFacilitator={true}
+          isFacilitator={arena?.isFacilitator ?? false}
           onPhaseSelect={async (phase) => {
             try {
               const res = await fetch(`/api/arenas/${arenaId}/phase`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phase }),
+                body: JSON.stringify({ phase, creatorToken: userToken }),
               });
               if (res.ok) {
                 const data = await res.json();
@@ -394,9 +476,12 @@ export default function ArenaPage() {
                   phaseStartedAt: data.data?.phaseStartedAt ?? new Date().toISOString(),
                   phaseDurationMinutes: data.data?.phaseDurationMinutes ?? null,
                 } : prev);
+              } else {
+                const err = await res.json().catch(() => null);
+                showError(err?.error ?? 'Could not change the phase.');
               }
             } catch {
-              // Silent
+              showError('Could not change the phase — check your connection.');
             }
           }}
         />
@@ -527,7 +612,7 @@ export default function ArenaPage() {
                     <button
                       key={prompt}
                       type="button"
-                      onClick={() => handleContribution('feature', prompt)}
+                      onClick={() => handleStarterPrompt(prompt)}
                       className="text-left px-4 py-2.5 text-sm text-dim border border-dashed border-border hover:border-accent hover:text-ink transition-colors"
                     >
                       &ldquo;{prompt}&rdquo;
@@ -580,6 +665,24 @@ export default function ArenaPage() {
         isLoading={isSummaryLoading}
         onRefresh={requestSummary}
       />
+
+      {/* Transient action-error toast — surfaces failures that were silent before */}
+      {actionError && (
+        <div
+          role="alert"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-risk text-paper px-4 py-2.5 text-xs font-mono shadow-lg max-w-[90vw]"
+        >
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          <span>{actionError}</span>
+          <button
+            onClick={() => setActionError(null)}
+            aria-label="Dismiss"
+            className="text-paper/60 hover:text-paper shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

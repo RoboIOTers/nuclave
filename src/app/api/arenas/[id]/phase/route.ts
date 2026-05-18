@@ -28,12 +28,20 @@ export async function POST(
 
   try {
     const body = await request.json();
-    const { phase, durationMinutes } = body;
+    const { phase, durationMinutes, creatorToken } = body;
 
     if (!ARENA_PHASES.includes(phase as ArenaPhase)) {
       return NextResponse.json(
         { success: false, error: 'Invalid phase' },
         { status: 400 }
+      );
+    }
+
+    // Only the arena facilitator (its creator) may change the phase.
+    if (creatorToken !== arena.creatorToken) {
+      return NextResponse.json(
+        { success: false, error: 'Only the arena facilitator can change the phase.' },
+        { status: 403 }
       );
     }
 
@@ -89,13 +97,17 @@ export async function POST(
       `;
     }
 
-    // If revisiting a phase, account for time already spent
+    // If revisiting a phase, resume its timer where it left off.
+    // The most recent history entry for this phase already holds the
+    // cumulative time spent in it: every resume backdates phase_started_at,
+    // so each newly recorded entry's timeSpentSeconds is a running total.
+    // Summing all visits would double-count from the 3rd visit onward.
+    // This must NOT depend on a configured duration — count-up timers
+    // (arenas created without a template) need to resume too.
     let startTimestamp = new Date().toISOString();
-    if (previousVisit && resolvedDuration) {
-      const allVisits = history.filter((h) => h.phase === phase);
-      const totalSpent = allVisits.reduce((sum, v) => sum + v.timeSpentSeconds, 0);
-      // Set start time back by the amount already spent, so the timer continues where it left off
-      startTimestamp = new Date(Date.now() - totalSpent * 1000).toISOString();
+    if (previousVisit) {
+      const spentSeconds = Math.max(0, previousVisit.timeSpentSeconds ?? 0);
+      startTimestamp = new Date(Date.now() - spentSeconds * 1000).toISOString();
     }
 
     // Switch to phase

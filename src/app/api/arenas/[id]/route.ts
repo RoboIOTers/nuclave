@@ -19,7 +19,7 @@ const ROLE_WEIGHTS: Record<string, number> = {
 };
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
@@ -31,6 +31,13 @@ export async function GET(
       { status: 404 }
     );
   }
+
+  // Resolve facilitator status server-side. creatorToken is the secret that
+  // authorizes phase/close actions, so it must never be sent to clients —
+  // expose only the derived boolean.
+  const token = request.nextUrl.searchParams.get('token');
+  const isFacilitator = !!token && token === arena.creatorToken;
+  const { creatorToken: _creatorToken, ...arenaPublic } = arena;
 
   // Load participants for role-based weighting
   const sql = getSql();
@@ -69,7 +76,8 @@ export async function GET(
   return NextResponse.json({
     success: true,
     data: {
-      ...arena,
+      ...arenaPublic,
+      isFacilitator,
       contributions,
       participantCount: new Set([
         ...contributions.map((c) => c.authorToken),

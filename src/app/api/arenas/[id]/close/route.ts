@@ -11,7 +11,7 @@ function getSql() {
 }
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
@@ -19,6 +19,16 @@ export async function POST(
 
   if (!arena) {
     return NextResponse.json({ success: false, error: 'Arena not found' }, { status: 404 });
+  }
+
+  // Closing an arena is destructive (generates the decision record and ends
+  // the session) — restrict it to the facilitator who created the arena.
+  const body = (await request.json().catch(() => ({}))) as { creatorToken?: string };
+  if (body.creatorToken !== arena.creatorToken) {
+    return NextResponse.json(
+      { success: false, error: 'Only the arena facilitator can close this arena.' },
+      { status: 403 }
+    );
   }
 
   const sql = getSql();
