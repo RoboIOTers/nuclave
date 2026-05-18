@@ -52,6 +52,8 @@ and the session ends with a structured decision document.
 
 ## Live Deployment
 - Running at https://nuclave.com on port 3002 behind nginx
-- Server started with: `DATABASE_URL="postgres://nuclave:nuclave_dev_2026@127.0.0.1:5432/nuclave" NODE_ENV=production npx tsx server.ts`
+- Managed by pm2 (app `nuclave`) running `server.ts` with `NODE_ENV=production`
+- Secrets (`DATABASE_URL`, API keys) come from `.env.local` (gitignored) — never hardcode them; see `.env.example` for the required variables
+- Rebuild + redeploy: `npm run build && pm2 restart nuclave`
 - nginx config at /etc/nginx/sites-enabled/nuclave.com
 - SSL via Let's Encrypt (auto-renew)
